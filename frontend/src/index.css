@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 48 33% 97%;
+    --foreground: 215 35% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 35% 16%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 35% 16%;
+    --primary: 201 91% 36%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 159 74% 94%;
+    --secondary-foreground: 164 71% 18%;
+    --muted: 215 28% 94%;
+    --muted-foreground: 215 16% 40%;
+    --accent: 39 93% 93%;
+    --accent-foreground: 24 83% 29%;
+    --destructive: 0 78% 54%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 23% 87%;
+    --input: 214 23% 87%;
+    --ring: 201 91% 36%;
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 213 33% 10%;
+    --foreground: 210 40% 98%;
+    --card: 215 31% 14%;
+    --card-foreground: 210 40% 98%;
+    --popover: 215 31% 14%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 192 88% 56%;
+    --primary-foreground: 213 33% 10%;
+    --secondary: 158 48% 16%;
+    --secondary-foreground: 156 73% 87%;
+    --muted: 215 25% 18%;
+    --muted-foreground: 214 20% 74%;
+    --accent: 34 41% 16%;
+    --accent-foreground: 45 93% 84%;
+    --destructive: 0 69% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 21% 24%;
+    --input: 215 21% 24%;
+    --ring: 192 88% 56%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply min-h-screen bg-background font-sans text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at top left, rgba(13, 148, 136, 0.12), transparent 36%),
+      radial-gradient(circle at right center, rgba(249, 115, 22, 0.08), transparent 28%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(248, 250, 252, 0.96));
+    background-attachment: fixed;
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(circle at top left, rgba(13, 148, 136, 0.18), transparent 34%),
+      radial-gradient(circle at right center, rgba(249, 115, 22, 0.12), transparent 24%),
+      linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 1));
+  }
+}
+
+@layer utilities {
+  .bg-grid {
+    background-size: 32px 32px;
+    background-image: theme(backgroundImage.grid);
+  }
+}
+
