@@ -9,10 +9,10 @@ import {
   fetchAvailableYears,
   fetchDashboardSummary,
   fetchFilterOptions,
-  subscribeToMaintenanceChanges,
 } from "@/lib/maintenance";
 import { formatMinutes, isIgnorableSupabaseAbortError } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
 
 export function DashboardPage() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -95,16 +95,31 @@ export function DashboardPage() {
   }, [filters, realtimeTick]);
 
   useEffect(() => {
-    const unsubscribe = subscribeToMaintenanceChanges(() => {
-      window.clearTimeout(realtimeTimerRef.current);
-      realtimeTimerRef.current = window.setTimeout(() => {
-        setRealtimeTick((current) => current + 1);
-      }, 250);
-    });
+    const channel = supabase
+      .channel(`maintenance-live-dashboard-${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: MAINTENANCE_SCHEMA,
+          table: "maintenance",
+        },
+        () => {
+          window.clearTimeout(realtimeTimerRef.current);
+          realtimeTimerRef.current = window.setTimeout(() => {
+            setRealtimeTick((current) => current + 1);
+          }, 250);
+        },
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.error("Dashboard realtime channel error");
+        }
+      });
 
     return () => {
       window.clearTimeout(realtimeTimerRef.current);
-      unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, []);
 

@@ -46,6 +46,35 @@ $$;
 create index if not exists idx_maintenance_lokasi on maintenance.maintenance(lokasi);
 create index if not exists idx_maintenance_tanggal on maintenance.maintenance(tanggal_maintenance);
 
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication
+    where pubname = 'supabase_realtime'
+  ) then
+    create publication supabase_realtime;
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_rel pr
+    join pg_class c on c.oid = pr.prrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_publication p on p.oid = pr.prpubid
+    where p.pubname = 'supabase_realtime'
+      and n.nspname = 'maintenance'
+      and c.relname = 'maintenance'
+  ) then
+    alter publication supabase_realtime add table maintenance.maintenance;
+  end if;
+end
+$$;
+
 grant usage on schema maintenance to anon, authenticated, service_role;
 grant select on maintenance.maintenance to anon;
 grant select, insert, update, delete on maintenance.maintenance to authenticated, service_role;

@@ -8,7 +8,6 @@ import {
   fetchFilterOptions,
   fetchMaintenanceForExport,
   fetchMaintenanceList,
-  subscribeToMaintenanceChanges,
   upsertMaintenanceRows,
   updateMaintenance,
 } from "@/lib/maintenance";
@@ -23,6 +22,7 @@ import { DeleteConfirmDialog } from "@/components/maintenance/delete-confirm-dia
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingState } from "@/components/ui/loading-state";
 import { isIgnorableSupabaseAbortError } from "@/lib/utils";
+import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
 
 export function MaintenancePage({ readOnly = false, showAssetSummary = false }) {
   const { isAuthenticated } = useAuth();
@@ -160,16 +160,31 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
   }, [effectiveFilters, showAssetSummary, realtimeTick]);
 
   useEffect(() => {
-    const unsubscribe = subscribeToMaintenanceChanges(() => {
-      window.clearTimeout(realtimeTimerRef.current);
-      realtimeTimerRef.current = window.setTimeout(() => {
-        setRealtimeTick((current) => current + 1);
-      }, 250);
-    });
+    const channel = supabase
+      .channel(`maintenance-live-page-${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: MAINTENANCE_SCHEMA,
+          table: "maintenance",
+        },
+        () => {
+          window.clearTimeout(realtimeTimerRef.current);
+          realtimeTimerRef.current = window.setTimeout(() => {
+            setRealtimeTick((current) => current + 1);
+          }, 250);
+        },
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.error("Maintenance realtime channel error");
+        }
+      });
 
     return () => {
       window.clearTimeout(realtimeTimerRef.current);
-      unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, []);
 
