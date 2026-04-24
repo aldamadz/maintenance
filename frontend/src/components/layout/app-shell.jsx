@@ -1,14 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  Activity,
   ChevronRight,
   LayoutDashboard,
   LogIn,
   LogOut,
   Menu,
-  MoonStar,
-  SunMedium,
   UserRound,
   Wrench,
   X,
@@ -17,7 +14,6 @@ import { LoginDialog } from "@/components/auth/login-dialog";
 import { useAuth } from "@/components/auth/auth-provider";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useTheme } from "@/components/theme/theme-provider";
 
 const navigation = [
   {
@@ -36,7 +32,6 @@ export function AppShell({ children }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
-  const { theme, resolvedTheme, setTheme } = useTheme();
   const { user, isAuthenticated, signOut } = useAuth();
 
   const activeItem = useMemo(
@@ -56,12 +51,7 @@ export function AppShell({ children }) {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-primary">
-                IT Support
-              </p>
-              <h1 className="mt-2 text-2xl font-extrabold tracking-tight">
-                Maintenance Hub
-              </h1>
+              <h1 className="text-2xl font-extrabold tracking-tight">Maintenance</h1>
             </div>
             <Button
               variant="ghost"
@@ -71,20 +61,6 @@ export function AppShell({ children }) {
             >
               <X className="h-5 w-5" />
             </Button>
-          </div>
-
-          <div className="mt-8 rounded-3xl bg-secondary/70 p-5 text-secondary-foreground">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-primary p-3 text-primary-foreground">
-                <Activity className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold">Operasional Harian</p>
-                <p className="text-xs opacity-80">
-                  Pantau maintenance perangkat dan distribusi beban kerja tim.
-                </p>
-              </div>
-            </div>
           </div>
 
           <nav className="mt-8 space-y-2">
@@ -114,33 +90,6 @@ export function AppShell({ children }) {
             })}
           </nav>
 
-          <div className="mt-auto hidden xl:block" />
-
-          <div className="mt-10 rounded-3xl border border-border/70 bg-muted/40 p-5">
-            <p className="text-sm font-semibold">Tema tampilan</p>
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              {["light", "dark", "system"].map((value) => (
-                <Button
-                  key={value}
-                  variant={theme === value ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTheme(value)}
-                >
-                  {value === "light" ? (
-                    <SunMedium className="h-4 w-4" />
-                  ) : value === "dark" ? (
-                    <MoonStar className="h-4 w-4" />
-                  ) : (
-                    <Activity className="h-4 w-4" />
-                  )}
-                  {value}
-                </Button>
-              ))}
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Mode aktif: <span className="font-medium">{resolvedTheme}</span>
-            </p>
-          </div>
         </aside>
 
         {mobileOpen ? (
@@ -164,18 +113,12 @@ export function AppShell({ children }) {
                   <Menu className="h-5 w-5" />
                 </Button>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                    Sistem Maintenance
-                  </p>
                   <h2 className="text-lg font-bold tracking-tight">
                     {activeItem?.label || "Dashboard"}
                   </h2>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">
-                  React + Supabase
-                </div>
                 {isAuthenticated ? (
                   <>
                     <div className="hidden items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm md:inline-flex">

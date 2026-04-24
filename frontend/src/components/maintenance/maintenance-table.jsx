@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, FileSpreadsheet, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -54,14 +54,6 @@ export function MaintenanceTable({
       <CardHeader className="flex flex-col gap-4 border-b border-border/60 md:flex-row md:items-center md:justify-between">
         <div>
           <CardTitle>Data Maintenance</CardTitle>
-          <CardDescription>
-            Pagination, sorting, search, dan aksi CRUD untuk riwayat maintenance.
-          </CardDescription>
-          {!canManage ? (
-            <p className="mt-2 text-sm text-muted-foreground">
-              Mode baca publik aktif. Login diperlukan untuk tambah, edit, dan hapus data.
-            </p>
-          ) : null}
         </div>
         <div className="flex flex-wrap gap-3">
           <Button variant="outline" onClick={onExport}>

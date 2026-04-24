@@ -15,7 +15,7 @@ export function StatsCard({ label, value, hint, icon: Icon, tone = "primary" }) 
           <div>
             <p className="text-sm text-muted-foreground">{label}</p>
             <h3 className="mt-3 text-3xl font-extrabold tracking-tight">{value}</h3>
-            <p className="mt-2 text-sm text-muted-foreground">{hint}</p>
+            {hint ? <p className="mt-2 text-sm text-muted-foreground">{hint}</p> : null}
           </div>
           <div className={`rounded-2xl p-3 ${toneClass}`}>
             <Icon className="h-5 w-5" />
@@ -25,4 +25,3 @@ export function StatsCard({ label, value, hint, icon: Icon, tone = "primary" }) 
     </Card>
   );
 }
-

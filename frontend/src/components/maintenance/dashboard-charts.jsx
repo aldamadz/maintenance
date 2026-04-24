@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 
 const PIE_COLORS = ["#0f766e", "#f97316", "#0284c7", "#84cc16", "#ef4444", "#8b5cf6"];
@@ -21,9 +21,6 @@ export function DashboardCharts({ yearly = [], activities = [] }) {
       <Card>
         <CardHeader>
           <CardTitle>Maintenance per Tahun</CardTitle>
-          <CardDescription>
-            Distribusi jumlah maintenance berdasarkan tahun aktif.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {yearly.length ? (
@@ -50,9 +47,6 @@ export function DashboardCharts({ yearly = [], activities = [] }) {
       <Card>
         <CardHeader>
           <CardTitle>Maintenance per Jenis Kegiatan</CardTitle>
-          <CardDescription>
-            Proporsi aktivitas maintenance berdasarkan kategori pekerjaan.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {activities.length ? (
@@ -87,4 +81,3 @@ export function DashboardCharts({ yearly = [], activities = [] }) {
     </div>
   );
 }
-
