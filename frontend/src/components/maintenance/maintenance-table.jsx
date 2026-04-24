@@ -48,17 +48,19 @@ export function MaintenanceTable({
   showManageActions = true,
   showExport = true,
   showImport = true,
+  filterControls = null,
 }) {
   const fileInputRef = useRef(null);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <Card>
+    <Card className="border-border/70 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
       <CardHeader className="flex flex-col gap-4 border-b border-border/60 md:flex-row md:items-center md:justify-between">
         <div>
           <CardTitle>Data Maintenance</CardTitle>
         </div>
         <div className="flex flex-wrap gap-3">
+          {filterControls}
           {showExport ? (
             <Button variant="outline" onClick={onExport}>
               <FileSpreadsheet className="h-4 w-4" />
@@ -106,10 +108,13 @@ export function MaintenanceTable({
         </div>
       </CardHeader>
 
-      <CardContent className="p-0">
+      <CardContent className="p-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
         {data.length ? (
           <>
-            <Table>
+            <Table
+              wrapperClassName="lg:min-h-0 lg:flex-1"
+              className="min-w-[960px]"
+            >
               <TableHeader>
                 <TableRow>
                   {[
@@ -120,7 +125,7 @@ export function MaintenanceTable({
                     ["jenis_kegiatan", "Kegiatan"],
                     ["durasi", "Durasi"],
                   ].map(([column, label]) => (
-                    <TableHead key={column}>
+                    <TableHead key={column} className="sticky top-0 z-10 bg-card">
                       <button
                         type="button"
                         className="inline-flex items-center gap-2"
@@ -134,9 +139,9 @@ export function MaintenanceTable({
                       </button>
                     </TableHead>
                   ))}
-                  <TableHead>Catatan</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-card">Catatan</TableHead>
                   {showManageActions ? (
-                    <TableHead className="text-right">Aksi</TableHead>
+                    <TableHead className="sticky top-0 z-10 bg-card text-right">Aksi</TableHead>
                   ) : null}
                 </TableRow>
               </TableHeader>
@@ -196,7 +201,7 @@ export function MaintenanceTable({
               </TableBody>
             </Table>
 
-            <div className="flex flex-col gap-4 border-t border-border/60 px-6 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-4 border-t border-border/60 px-6 py-4 md:flex-row md:items-center md:justify-between">
               <div className="text-sm text-muted-foreground">
                 Menampilkan {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, total)} dari {total} data
               </div>

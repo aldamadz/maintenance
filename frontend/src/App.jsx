@@ -24,9 +24,11 @@ const LoginPage = lazy(() =>
 
 function PublicLayout() {
   return (
-    <AppShell showAuthControls={false} defaultTitle="Data Maintenance">
-      <Outlet />
-    </AppShell>
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden">
+      <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:flex lg:h-full lg:flex-col lg:overflow-hidden lg:px-8">
+        <Outlet />
+      </main>
+    </div>
   );
 }
 
@@ -54,7 +56,7 @@ export default function App() {
     <Suspense fallback={<LoadingState label="Menyiapkan halaman..." />}>
       <Routes>
         <Route element={<PublicLayout />}>
-          <Route path="/" element={<MaintenancePage readOnly />} />
+          <Route path="/" element={<MaintenancePage readOnly showAssetSummary />} />
         </Route>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedLayout />}>

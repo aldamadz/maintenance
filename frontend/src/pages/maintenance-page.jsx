@@ -4,6 +4,7 @@ import {
   createMaintenance,
   deleteMaintenance,
   fetchAvailableYears,
+  fetchDashboardSummary,
   fetchFilterOptions,
   fetchMaintenanceForExport,
   fetchMaintenanceList,
@@ -18,15 +19,18 @@ import { MaintenanceFilters } from "@/components/maintenance/maintenance-filters
 import { MaintenanceTable } from "@/components/maintenance/maintenance-table";
 import { MaintenanceFormDialog } from "@/components/maintenance/maintenance-form-dialog";
 import { DeleteConfirmDialog } from "@/components/maintenance/delete-confirm-dialog";
+import { Card, CardContent } from "@/components/ui/card";
 import { LoadingState } from "@/components/ui/loading-state";
 
-export function MaintenancePage({ readOnly = false }) {
+export function MaintenancePage({ readOnly = false, showAssetSummary = false }) {
   const { isAuthenticated } = useAuth();
+  const isPublicView = readOnly && showAssetSummary;
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [options, setOptions] = useState({ lokasi: [], jenisKegiatan: [] });
   const [yearOptions, setYearOptions] = useState([]);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [sortColumn, setSortColumn] = useState("tanggal_maintenance");
@@ -113,6 +117,27 @@ export function MaintenancePage({ readOnly = false }) {
 
     loadTable();
   }, [effectiveFilters, page, pageSize, sortColumn, sortDirection]);
+
+  useEffect(() => {
+    async function loadSummary() {
+      if (!showAssetSummary) {
+        return;
+      }
+
+      try {
+        const result = await fetchDashboardSummary(effectiveFilters);
+        setSummary(result);
+      } catch (error) {
+        toast({
+          title: "Gagal memuat ringkasan aset",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    }
+
+    loadSummary();
+  }, [effectiveFilters, showAssetSummary]);
 
   function handleFilterChange(field, value) {
     setPage(1);
@@ -308,19 +333,58 @@ export function MaintenancePage({ readOnly = false }) {
   }
 
   return (
-    <div className="space-y-6">
-      <MaintenanceFilters
-        filters={filters}
-        onChange={handleFilterChange}
-        onReset={handleResetFilters}
-        lokasiOptions={options.lokasi}
-        yearOptions={yearOptions}
-        activityOptions={options.jenisKegiatan}
-        showSearch
-      />
+    <div className="space-y-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden lg:space-y-4">
+      {isPublicView ? (
+        <div className="grid shrink-0 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <Card className="border-border/70">
+            <CardContent className="p-6">
+              <h1 className="text-3xl font-extrabold tracking-tight">
+                Data maintenance perangkat IT
+              </h1>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70">
+            <CardContent className="p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Total aset
+              </p>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight">
+                {summary?.total_aset ?? 0}
+              </h2>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70">
+            <CardContent className="p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Total maintenance
+              </p>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight">
+                {summary?.total_maintenance ?? 0}
+              </h2>
+            </CardContent>
+          </Card>
+        </div>
+      ) : showAssetSummary ? (
+        <Card className="shrink-0 border-border/70">
+          <CardContent className="p-6">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Total aset
+              </p>
+              <h1 className="mt-3 text-3xl font-extrabold tracking-tight">
+                {summary?.total_aset ?? 0}
+              </h1>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {loading && !rows.length ? (
-        <LoadingState label="Memuat tabel maintenance..." />
+        <div className="lg:flex lg:min-h-0 lg:flex-1 lg:items-center lg:justify-center">
+          <LoadingState label="Memuat tabel maintenance..." />
+        </div>
       ) : (
         <MaintenanceTable
           data={rows}
@@ -379,8 +443,19 @@ export function MaintenancePage({ readOnly = false }) {
           }
           importLoading={importLoading}
           showManageActions={!readOnly}
-          showExport={!readOnly}
+          showExport
           showImport={!readOnly}
+          filterControls={
+            <MaintenanceFilters
+              filters={filters}
+              onChange={handleFilterChange}
+              onReset={handleResetFilters}
+              lokasiOptions={options.lokasi}
+              yearOptions={yearOptions}
+              activityOptions={options.jenisKegiatan}
+              showSearch
+            />
+          }
         />
       )}
 

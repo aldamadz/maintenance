@@ -41,13 +41,16 @@ export function AppShell({ children, showAuthControls = true, defaultTitle = "Da
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-40 w-80 border-r border-border/70 bg-card/90 p-6 backdrop-blur xl:static xl:block",
-            mobileOpen ? "block" : "hidden xl:block",
+            "fixed inset-y-0 left-0 z-40 flex w-[288px] flex-col border-r border-border/70 bg-card/92 p-5 backdrop-blur xl:static xl:flex",
+            mobileOpen ? "flex" : "hidden xl:flex",
           )}
         >
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-extrabold tracking-tight">Maintenance</h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Sistem
+              </p>
+              <h1 className="mt-2 text-2xl font-extrabold tracking-tight">Maintenance</h1>
             </div>
             <Button
               variant="ghost"
@@ -72,7 +75,7 @@ export function AppShell({ children, showAuthControls = true, defaultTitle = "Da
                   className={cn(
                     "flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition",
                     isActive
-                      ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                      ? "bg-primary/95 text-primary-foreground shadow-lg shadow-primary/15"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
@@ -85,7 +88,14 @@ export function AppShell({ children, showAuthControls = true, defaultTitle = "Da
               );
             })}
           </nav>
-
+          <div className="mt-auto rounded-3xl border border-border/60 bg-background/70 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Workspace
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Fokus pada dashboard dan data maintenance tanpa distraksi.
+            </p>
+          </div>
         </aside>
 
         {mobileOpen ? (
@@ -97,7 +107,7 @@ export function AppShell({ children, showAuthControls = true, defaultTitle = "Da
         ) : null}
 
         <main className="flex min-h-screen flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-border/60 bg-background/85 backdrop-blur">
+          <header className="sticky top-0 z-20 border-b border-border/60 bg-background/88 backdrop-blur">
             <div className="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
               <div className="flex items-center gap-3">
                 <Button
@@ -109,6 +119,9 @@ export function AppShell({ children, showAuthControls = true, defaultTitle = "Da
                   <Menu className="h-5 w-5" />
                 </Button>
                 <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    Internal
+                  </p>
                   <h2 className="text-lg font-bold tracking-tight">
                     {activeItem?.label || defaultTitle}
                   </h2>

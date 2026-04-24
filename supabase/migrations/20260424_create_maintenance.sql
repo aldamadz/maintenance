@@ -172,6 +172,7 @@ as $$
     limit 1
   )
   select jsonb_build_object(
+    'total_aset', coalesce((select count(distinct kode_aset)::integer from filtered), 0),
     'total_maintenance', coalesce((select count(*)::integer from filtered), 0),
     'total_durasi', coalesce((select sum(coalesce(durasi, 0))::integer from filtered), 0),
     'kegiatan_paling_sering', coalesce((select jenis_kegiatan from top_activity), '-'),

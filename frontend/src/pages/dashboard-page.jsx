@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarRange, Clock3, Filter, Sparkles } from "lucide-react";
+import { Boxes, Clock3, Sparkles, Wrench } from "lucide-react";
 import { MaintenanceFilters } from "@/components/maintenance/maintenance-filters";
 import { DashboardCharts } from "@/components/maintenance/dashboard-charts";
 import { StatsCard } from "@/components/maintenance/stats-card";
@@ -110,14 +110,24 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <MaintenanceFilters
-        filters={filters}
-        onChange={handleFilterChange}
-        onReset={() => setFilters(DEFAULT_FILTERS)}
-        lokasiOptions={options.lokasi}
-        yearOptions={yearOptions}
-        activityOptions={options.jenisKegiatan}
-      />
+      <div className="flex flex-col gap-4 rounded-3xl border border-border/70 bg-card/75 p-5 shadow-panel sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            Ringkasan
+          </p>
+          <h1 className="mt-2 text-2xl font-extrabold tracking-tight">
+            Dashboard Maintenance
+          </h1>
+        </div>
+        <MaintenanceFilters
+          filters={filters}
+          onChange={handleFilterChange}
+          onReset={() => setFilters(DEFAULT_FILTERS)}
+          lokasiOptions={options.lokasi}
+          yearOptions={yearOptions}
+          activityOptions={options.jenisKegiatan}
+        />
+      </div>
 
       {loading && !summary ? (
         <LoadingState label="Memuat dashboard maintenance..." />
@@ -125,26 +135,27 @@ export function DashboardPage() {
         <>
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
             <StatsCard
+              label="Total aset"
+              value={summary?.total_aset || 0}
+              icon={Boxes}
+              tone="secondary"
+            />
+            <StatsCard
               label="Total maintenance"
               value={summary?.total_maintenance || 0}
-              icon={Filter}
+              icon={Wrench}
             />
             <StatsCard
               label="Total durasi"
               value={formatMinutes(summary?.total_durasi || 0)}
               icon={Clock3}
-              tone="secondary"
+              tone="accent"
             />
             <StatsCard
               label="Kegiatan paling sering"
               value={summary?.kegiatan_paling_sering || "-"}
               icon={Sparkles}
-              tone="accent"
-            />
-            <StatsCard
-              label="Periode aktif"
-              value={summary?.yearly?.length || 0}
-              icon={CalendarRange}
+              tone="secondary"
             />
           </div>
 

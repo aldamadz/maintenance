@@ -50,13 +50,16 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-8">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md border-border/70">
         <CardHeader className="space-y-4">
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <LockKeyhole className="h-5 w-5" />
           </div>
           <div>
-            <CardTitle>Login</CardTitle>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Internal Access
+            </p>
+            <CardTitle className="mt-2">Login</CardTitle>
             <p className="mt-2 text-sm text-muted-foreground">
               Masuk untuk mengakses dashboard dan data maintenance.
             </p>

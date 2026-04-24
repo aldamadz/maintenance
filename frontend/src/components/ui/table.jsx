@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 
-export function Table({ className, ...props }) {
+export function Table({ className, wrapperClassName, ...props }) {
   return (
-    <div className="w-full overflow-auto">
+    <div className={cn("w-full overflow-auto", wrapperClassName)}>
       <table className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   );
@@ -43,4 +43,3 @@ export function TableHead({ className, ...props }) {
 export function TableCell({ className, ...props }) {
   return <td className={cn("p-4 align-middle", className)} {...props} />;
 }
-

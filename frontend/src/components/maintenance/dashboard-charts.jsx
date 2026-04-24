@@ -3,7 +3,6 @@ import {
   BarChart,
   Cell,
   CartesianGrid,
-  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -14,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 
-const PIE_COLORS = ["#0f766e", "#f97316", "#0284c7", "#84cc16", "#ef4444", "#8b5cf6"];
+const PIE_COLORS = ["#0f766e", "#0891b2", "#2563eb", "#65a30d", "#ea580c", "#dc2626"];
 const tooltipContentStyle = {
   backgroundColor: "hsl(var(--card))",
   border: "1px solid hsl(var(--border))",
@@ -37,17 +36,11 @@ const chartAxisStyle = {
   fill: "hsl(var(--muted-foreground))",
 };
 
-const legendWrapperStyle = {
-  color: "hsl(var(--muted-foreground))",
-  fontSize: "12px",
-  paddingTop: "8px",
-};
-
 export function DashboardCharts({ yearly = [], activities = [] }) {
   return (
     <div className="grid gap-6 xl:grid-cols-2">
-      <Card>
-        <CardHeader>
+      <Card className="border-border/70">
+        <CardHeader className="pb-2">
           <CardTitle>Maintenance per Tahun</CardTitle>
         </CardHeader>
         <CardContent>
@@ -64,8 +57,12 @@ export function DashboardCharts({ yearly = [], activities = [] }) {
                     itemStyle={tooltipItemStyle}
                     cursor={{ fill: "rgba(148, 163, 184, 0.12)" }}
                   />
-                  <Legend wrapperStyle={legendWrapperStyle} />
-                  <Bar dataKey="total_maintenance" name="Maintenance" fill="#0284c7" radius={[10, 10, 0, 0]} />
+                  <Bar
+                    dataKey="total_maintenance"
+                    name="Maintenance"
+                    fill="#0f766e"
+                    radius={[10, 10, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -78,35 +75,58 @@ export function DashboardCharts({ yearly = [], activities = [] }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="border-border/70">
+        <CardHeader className="pb-2">
           <CardTitle>Maintenance per Jenis Kegiatan</CardTitle>
         </CardHeader>
         <CardContent>
           {activities.length ? (
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={activities}
-                    dataKey="total_maintenance"
-                    nameKey="jenis_kegiatan"
-                    innerRadius={70}
-                    outerRadius={105}
-                    paddingAngle={4}
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
+              <div className="h-[320px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={activities}
+                      dataKey="total_maintenance"
+                      nameKey="jenis_kegiatan"
+                      innerRadius={70}
+                      outerRadius={105}
+                      paddingAngle={4}
+                    >
+                      {activities.map((entry, index) => (
+                        <Cell key={entry.jenis_kegiatan} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                      itemStyle={tooltipItemStyle}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="space-y-3 lg:pl-3">
+                {activities.map((item, index) => (
+                  <div
+                    key={item.jenis_kegiatan}
+                    className="flex items-center justify-between gap-3 rounded-2xl bg-muted/45 px-3 py-2"
                   >
-                    {activities.map((entry, index) => (
-                      <Cell key={entry.jenis_kegiatan} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={tooltipContentStyle}
-                    labelStyle={tooltipLabelStyle}
-                    itemStyle={tooltipItemStyle}
-                  />
-                  <Legend wrapperStyle={legendWrapperStyle} />
-                </PieChart>
-              </ResponsiveContainer>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                      />
+                      <span className="text-sm font-medium capitalize">
+                        {item.jenis_kegiatan}
+                      </span>
+                    </div>
+                    <span className="text-sm font-semibold text-muted-foreground">
+                      {item.total_maintenance}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <EmptyState

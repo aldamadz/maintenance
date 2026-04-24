@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -111,12 +112,10 @@ export function MaintenanceFormDialog({
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
           <div>
             <label className="mb-2 block text-sm font-semibold">Tanggal maintenance</label>
-            <Input
-              type="date"
+            <DatePicker
               value={formValues.tanggal_maintenance}
-              onChange={(event) =>
-                updateField("tanggal_maintenance", event.target.value)
-              }
+              onChange={(value) => updateField("tanggal_maintenance", value)}
+              placeholder="Pilih tanggal maintenance"
             />
             {errors.tanggal_maintenance ? (
               <p className="mt-1 text-xs text-destructive">{errors.tanggal_maintenance}</p>
@@ -222,4 +221,3 @@ export function MaintenanceFormDialog({
     </Dialog>
   );
 }
-
