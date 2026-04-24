@@ -3,14 +3,12 @@ import { Link, useLocation } from "react-router-dom";
 import {
   ChevronRight,
   LayoutDashboard,
-  LogIn,
   LogOut,
   Menu,
   UserRound,
   Wrench,
   X,
 } from "lucide-react";
-import { LoginDialog } from "@/components/auth/login-dialog";
 import { useAuth } from "@/components/auth/auth-provider";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -28,11 +26,10 @@ const navigation = [
   },
 ];
 
-export function AppShell({ children }) {
+export function AppShell({ children, showAuthControls = true, defaultTitle = "Dashboard" }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
-  const { user, isAuthenticated, signOut } = useAuth();
+  const { user, signOut } = useAuth();
 
   const activeItem = useMemo(
     () => navigation.find((item) => item.href === location.pathname),
@@ -41,7 +38,6 @@ export function AppShell({ children }) {
 
   return (
     <div className="min-h-screen">
-      <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
         <aside
           className={cn(
@@ -114,37 +110,30 @@ export function AppShell({ children }) {
                 </Button>
                 <div>
                   <h2 className="text-lg font-bold tracking-tight">
-                    {activeItem?.label || "Dashboard"}
+                    {activeItem?.label || defaultTitle}
                   </h2>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                {isAuthenticated ? (
-                  <>
-                    <div className="hidden items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm md:inline-flex">
-                      <UserRound className="h-4 w-4 text-primary" />
-                      <span className="max-w-52 truncate">{user?.email}</span>
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={async () => {
-                        const { error } = await signOut();
-                        if (error) {
-                          console.error(error);
-                        }
-                      }}
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Logout
-                    </Button>
-                  </>
-                ) : (
-                  <Button onClick={() => setLoginOpen(true)}>
-                    <LogIn className="h-4 w-4" />
-                    Login
+              {showAuthControls ? (
+                <div className="flex items-center gap-3">
+                  <div className="hidden items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm md:inline-flex">
+                    <UserRound className="h-4 w-4 text-primary" />
+                    <span className="max-w-52 truncate">{user?.email}</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      const { error } = await signOut();
+                      if (error) {
+                        console.error(error);
+                      }
+                    }}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
                   </Button>
-                )}
-              </div>
+                </div>
+              ) : null}
             </div>
           </header>
 

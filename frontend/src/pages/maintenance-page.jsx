@@ -18,10 +18,9 @@ import { MaintenanceFilters } from "@/components/maintenance/maintenance-filters
 import { MaintenanceTable } from "@/components/maintenance/maintenance-table";
 import { MaintenanceFormDialog } from "@/components/maintenance/maintenance-form-dialog";
 import { DeleteConfirmDialog } from "@/components/maintenance/delete-confirm-dialog";
-import { Card, CardContent } from "@/components/ui/card";
 import { LoadingState } from "@/components/ui/loading-state";
 
-export function MaintenancePage() {
+export function MaintenancePage({ readOnly = false }) {
   const { isAuthenticated } = useAuth();
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [options, setOptions] = useState({ lokasi: [], jenisKegiatan: [] });
@@ -310,19 +309,6 @@ export function MaintenancePage() {
 
   return (
     <div className="space-y-6">
-      {!isAuthenticated ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col gap-3 p-6 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-sm font-semibold">Akses publik aktif</p>
-              <p className="text-sm text-muted-foreground">
-                Semua orang bisa melihat data. Login Supabase diperlukan untuk operasi CRUD.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
       <MaintenanceFilters
         filters={filters}
         onChange={handleFilterChange}
@@ -384,7 +370,7 @@ export function MaintenancePage() {
           }}
           onExport={handleExport}
           onImport={handleImport}
-          canManage={isAuthenticated}
+          canManage={!readOnly && isAuthenticated}
           onRequestLogin={() =>
             toast({
               title: "Login diperlukan",
@@ -392,25 +378,32 @@ export function MaintenancePage() {
             })
           }
           importLoading={importLoading}
+          showManageActions={!readOnly}
+          showExport={!readOnly}
+          showImport={!readOnly}
         />
       )}
 
-      <MaintenanceFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        initialValues={selectedRow}
-        lokasiOptions={options.lokasi}
-        onSubmit={handleSubmit}
-        loading={submitting}
-      />
+      {!readOnly ? (
+        <MaintenanceFormDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          initialValues={selectedRow}
+          lokasiOptions={options.lokasi}
+          onSubmit={handleSubmit}
+          loading={submitting}
+        />
+      ) : null}
 
-      <DeleteConfirmDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        item={selectedRow}
-        loading={deleteLoading}
-        onConfirm={handleDelete}
-      />
+      {!readOnly ? (
+        <DeleteConfirmDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          item={selectedRow}
+          loading={deleteLoading}
+          onConfirm={handleDelete}
+        />
+      ) : null}
     </div>
   );
 }

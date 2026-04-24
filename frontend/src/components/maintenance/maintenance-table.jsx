@@ -45,6 +45,9 @@ export function MaintenanceTable({
   canManage = false,
   onRequestLogin,
   importLoading = false,
+  showManageActions = true,
+  showExport = true,
+  showImport = true,
 }) {
   const fileInputRef = useRef(null);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -56,42 +59,50 @@ export function MaintenanceTable({
           <CardTitle>Data Maintenance</CardTitle>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button variant="outline" onClick={onExport}>
-            <FileSpreadsheet className="h-4 w-4" />
-            Export Excel
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file && onImport) {
-                onImport(file);
-              }
-              event.target.value = "";
-            }}
-          />
-          <Button
-            variant="outline"
-            disabled={importLoading}
-            onClick={() => {
-              if (!canManage) {
-                onRequestLogin?.();
-                return;
-              }
+          {showExport ? (
+            <Button variant="outline" onClick={onExport}>
+              <FileSpreadsheet className="h-4 w-4" />
+              Export Excel
+            </Button>
+          ) : null}
+          {showImport ? (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file && onImport) {
+                    onImport(file);
+                  }
+                  event.target.value = "";
+                }}
+              />
+              <Button
+                variant="outline"
+                disabled={importLoading}
+                onClick={() => {
+                  if (!canManage) {
+                    onRequestLogin?.();
+                    return;
+                  }
 
-              fileInputRef.current?.click();
-            }}
-          >
-            <Upload className="h-4 w-4" />
-            {importLoading ? "Import..." : "Import Excel"}
-          </Button>
-          <Button onClick={canManage ? onCreate : onRequestLogin}>
-            <Plus className="h-4 w-4" />
-            {canManage ? "Tambah Data" : "Login untuk CRUD"}
-          </Button>
+                  fileInputRef.current?.click();
+                }}
+              >
+                <Upload className="h-4 w-4" />
+                {importLoading ? "Import..." : "Import Excel"}
+              </Button>
+            </>
+          ) : null}
+          {showManageActions ? (
+            <Button onClick={canManage ? onCreate : onRequestLogin}>
+              <Plus className="h-4 w-4" />
+              {canManage ? "Tambah Data" : "Login untuk CRUD"}
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
 
@@ -124,7 +135,9 @@ export function MaintenanceTable({
                     </TableHead>
                   ))}
                   <TableHead>Catatan</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
+                  {showManageActions ? (
+                    <TableHead className="text-right">Aksi</TableHead>
+                  ) : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -156,26 +169,28 @@ export function MaintenanceTable({
                         {item.catatan || "-"}
                       </p>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          disabled={!canManage}
-                          onClick={() => onEdit(item)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="destructive"
-                          disabled={!canManage}
-                          onClick={() => onDelete(item)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    {showManageActions ? (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            disabled={!canManage}
+                            onClick={() => onEdit(item)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            disabled={!canManage}
+                            onClick={() => onDelete(item)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>
