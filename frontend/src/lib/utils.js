@@ -47,3 +47,11 @@ export function toDateInputValue(date) {
   return format(date, "yyyy-MM-dd");
 }
 
+export function isIgnorableSupabaseAbortError(error) {
+  const message = error?.message || "";
+
+  return (
+    error?.name === "AbortError" ||
+    message.includes("Lock broken by another request with the 'steal' option.")
+  );
+}

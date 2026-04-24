@@ -39,14 +39,14 @@ const chartAxisStyle = {
 export function DashboardCharts({ yearly = [], activities = [] }) {
   return (
     <div className="grid gap-6 xl:grid-cols-2">
-      <Card className="border-border/70">
+      <Card className="min-w-0 border-border/70">
         <CardHeader className="pb-2">
           <CardTitle>Maintenance per Tahun</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           {yearly.length ? (
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[320px] min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={320}>
                 <BarChart data={yearly}>
                   <CartesianGrid stroke="rgba(148, 163, 184, 0.18)" vertical={false} />
                   <XAxis dataKey="tahun" tick={chartAxisStyle} axisLine={false} tickLine={false} />
@@ -75,15 +75,15 @@ export function DashboardCharts({ yearly = [], activities = [] }) {
         </CardContent>
       </Card>
 
-      <Card className="border-border/70">
+      <Card className="min-w-0 border-border/70">
         <CardHeader className="pb-2">
           <CardTitle>Maintenance per Jenis Kegiatan</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           {activities.length ? (
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
-              <div className="h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
+            <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
+              <div className="h-[320px] min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={320}>
                   <PieChart>
                     <Pie
                       data={activities}

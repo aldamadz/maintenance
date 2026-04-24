@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
+import { isIgnorableSupabaseAbortError } from "@/lib/utils";
 
 const AuthContext = createContext({
   session: null,
@@ -25,11 +26,13 @@ export function AuthProvider({ children }) {
       } = await supabase.auth.getSession();
 
       if (error) {
-        toast({
-          title: "Gagal membaca sesi login",
-          description: error.message,
-          variant: "destructive",
-        });
+        if (!isIgnorableSupabaseAbortError(error)) {
+          toast({
+            title: "Gagal membaca sesi login",
+            description: error.message,
+            variant: "destructive",
+          });
+        }
       }
 
       if (mounted) {
@@ -75,4 +78,3 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
-

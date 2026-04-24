@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
   createMaintenance,
@@ -22,6 +22,7 @@ import { MaintenanceFormDialog } from "@/components/maintenance/maintenance-form
 import { DeleteConfirmDialog } from "@/components/maintenance/delete-confirm-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingState } from "@/components/ui/loading-state";
+import { isIgnorableSupabaseAbortError } from "@/lib/utils";
 
 export function MaintenancePage({ readOnly = false, showAssetSummary = false }) {
   const { isAuthenticated } = useAuth();
@@ -43,6 +44,7 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+  const [realtimeTick, setRealtimeTick] = useState(0);
   const realtimeTimerRef = useRef(null);
   const deferredSearch = useDeferredValue(filters.search);
 
@@ -54,12 +56,16 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
     [deferredSearch, filters],
   );
 
-  const loadFilterOptions = useEffectEvent(async ({ showError = true } = {}) => {
-    try {
-      const filterOptions = await fetchFilterOptions();
-      setOptions(filterOptions);
-    } catch (error) {
-      if (showError) {
+  useEffect(() => {
+    async function loadFilterOptions() {
+      try {
+        const filterOptions = await fetchFilterOptions();
+        setOptions(filterOptions);
+      } catch (error) {
+        if (isIgnorableSupabaseAbortError(error)) {
+          return;
+        }
+
         toast({
           title: "Gagal memuat filter",
           description: error.message,
@@ -67,19 +73,25 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
         });
       }
     }
-  });
 
-  const loadYears = useEffectEvent(async ({ showError = true } = {}) => {
-    if (!filters.lokasi) {
-      setYearOptions([]);
-      return;
-    }
+    loadFilterOptions();
+  }, [realtimeTick]);
 
-    try {
-      const years = await fetchAvailableYears(filters.lokasi);
-      setYearOptions(years);
-    } catch (error) {
-      if (showError) {
+  useEffect(() => {
+    async function loadYears() {
+      if (!filters.lokasi) {
+        setYearOptions([]);
+        return;
+      }
+
+      try {
+        const years = await fetchAvailableYears(filters.lokasi);
+        setYearOptions(years);
+      } catch (error) {
+        if (isIgnorableSupabaseAbortError(error)) {
+          return;
+        }
+
         toast({
           title: "Gagal memuat opsi tahun",
           description: error.message,
@@ -87,48 +99,55 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
         });
       }
     }
-  });
 
-  const loadTable = useEffectEvent(async ({ showLoading = true, showError = true } = {}) => {
-    try {
-      if (showLoading) {
+    loadYears();
+  }, [filters.lokasi, realtimeTick]);
+
+  useEffect(() => {
+    async function loadTable() {
+      try {
         setLoading(true);
-      }
+        const result = await fetchMaintenanceList({
+          filters: effectiveFilters,
+          page,
+          pageSize,
+          sortColumn,
+          sortDirection,
+        });
+        setRows(result.data);
+        setTotal(result.count);
+      } catch (error) {
+        if (isIgnorableSupabaseAbortError(error)) {
+          return;
+        }
 
-      const result = await fetchMaintenanceList({
-        filters: effectiveFilters,
-        page,
-        pageSize,
-        sortColumn,
-        sortDirection,
-      });
-      setRows(result.data);
-      setTotal(result.count);
-    } catch (error) {
-      if (showError) {
         toast({
           title: "Gagal memuat data maintenance",
           description: error.message,
           variant: "destructive",
         });
-      }
-    } finally {
-      if (showLoading) {
+      } finally {
         setLoading(false);
       }
     }
-  });
 
-  const loadSummary = useEffectEvent(async ({ showError = true } = {}) => {
-    if (!showAssetSummary) {
-      return;
-    }
+    loadTable();
+  }, [effectiveFilters, page, pageSize, sortColumn, sortDirection, realtimeTick]);
 
-    try {
-      const result = await fetchDashboardSummary(effectiveFilters);
-      setSummary(result);
-    } catch (error) {
-      if (showError) {
+  useEffect(() => {
+    async function loadSummary() {
+      if (!showAssetSummary) {
+        return;
+      }
+
+      try {
+        const result = await fetchDashboardSummary(effectiveFilters);
+        setSummary(result);
+      } catch (error) {
+        if (isIgnorableSupabaseAbortError(error)) {
+          return;
+        }
+
         toast({
           title: "Gagal memuat ringkasan aset",
           description: error.message,
@@ -136,38 +155,15 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
         });
       }
     }
-  });
 
-  useEffect(() => {
-    loadFilterOptions();
-  }, [loadFilterOptions]);
-
-  useEffect(() => {
-    loadYears();
-  }, [filters.lokasi, loadYears]);
-
-  useEffect(() => {
-    loadTable();
-  }, [effectiveFilters, page, pageSize, sortColumn, sortDirection, loadTable]);
-
-  useEffect(() => {
     loadSummary();
-  }, [effectiveFilters, showAssetSummary, loadSummary]);
-
-  const handleRealtimeRefresh = useEffectEvent(async () => {
-    await Promise.all([
-      loadFilterOptions({ showError: false }),
-      loadYears({ showError: false }),
-      loadTable({ showLoading: false, showError: false }),
-      loadSummary({ showError: false }),
-    ]);
-  });
+  }, [effectiveFilters, showAssetSummary, realtimeTick]);
 
   useEffect(() => {
     const unsubscribe = subscribeToMaintenanceChanges(() => {
       window.clearTimeout(realtimeTimerRef.current);
       realtimeTimerRef.current = window.setTimeout(() => {
-        handleRealtimeRefresh();
+        setRealtimeTick((current) => current + 1);
       }, 250);
     });
 
@@ -175,7 +171,7 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
       window.clearTimeout(realtimeTimerRef.current);
       unsubscribe();
     };
-  }, [handleRealtimeRefresh]);
+  }, []);
 
   function handleFilterChange(field, value) {
     setPage(1);
@@ -220,7 +216,15 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
   }
 
   async function refreshTable() {
-    await loadTable({ showLoading: false });
+    const result = await fetchMaintenanceList({
+      filters: effectiveFilters,
+      page,
+      pageSize,
+      sortColumn,
+      sortDirection,
+    });
+    setRows(result.data);
+    setTotal(result.count);
   }
 
   async function handleSubmit(payload) {
