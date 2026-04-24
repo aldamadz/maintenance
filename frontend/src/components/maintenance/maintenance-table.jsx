@@ -1,4 +1,5 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
+import { useRef } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown, FileSpreadsheet, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,9 +41,12 @@ export function MaintenanceTable({
   onEdit,
   onDelete,
   onExport,
+  onImport,
   canManage = false,
   onRequestLogin,
+  importLoading = false,
 }) {
+  const fileInputRef = useRef(null);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -63,6 +67,34 @@ export function MaintenanceTable({
           <Button variant="outline" onClick={onExport}>
             <FileSpreadsheet className="h-4 w-4" />
             Export Excel
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file && onImport) {
+                onImport(file);
+              }
+              event.target.value = "";
+            }}
+          />
+          <Button
+            variant="outline"
+            disabled={importLoading}
+            onClick={() => {
+              if (!canManage) {
+                onRequestLogin?.();
+                return;
+              }
+
+              fileInputRef.current?.click();
+            }}
+          >
+            <Upload className="h-4 w-4" />
+            {importLoading ? "Import..." : "Import Excel"}
           </Button>
           <Button onClick={canManage ? onCreate : onRequestLogin}>
             <Plus className="h-4 w-4" />

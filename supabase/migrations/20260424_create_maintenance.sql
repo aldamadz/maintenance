@@ -29,6 +29,20 @@ create table if not exists maintenance.maintenance (
   created_at timestamp default now()
 );
 
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'uq_maintenance_tanggal_kode_aset'
+  ) then
+    alter table maintenance.maintenance
+    add constraint uq_maintenance_tanggal_kode_aset
+    unique (tanggal_maintenance, kode_aset);
+  end if;
+end
+$$;
+
 create index if not exists idx_maintenance_lokasi on maintenance.maintenance(lokasi);
 create index if not exists idx_maintenance_tanggal on maintenance.maintenance(tanggal_maintenance);
 

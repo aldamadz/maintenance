@@ -7,10 +7,12 @@ import {
   fetchFilterOptions,
   fetchMaintenanceForExport,
   fetchMaintenanceList,
+  upsertMaintenanceRows,
   updateMaintenance,
 } from "@/lib/maintenance";
 import { DEFAULT_FILTERS } from "@/lib/constants";
 import { exportMaintenanceToExcel } from "@/lib/export";
+import { parseMaintenanceWorkbook } from "@/lib/maintenance-import";
 import { toast } from "@/hooks/use-toast";
 import { MaintenanceFilters } from "@/components/maintenance/maintenance-filters";
 import { MaintenanceTable } from "@/components/maintenance/maintenance-table";
@@ -33,6 +35,7 @@ export function MaintenancePage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -256,6 +259,55 @@ export function MaintenancePage() {
     }
   }
 
+  async function handleImport(file) {
+    if (!isAuthenticated) {
+      toast({
+        title: "Login diperlukan",
+        description: "Silakan login Supabase untuk melakukan import data.",
+      });
+      return;
+    }
+
+    try {
+      setImportLoading(true);
+      const parsed = await parseMaintenanceWorkbook(file);
+
+      if (!parsed.rows.length) {
+        throw new Error("Tidak ada baris valid yang bisa diimport.");
+      }
+
+      await upsertMaintenanceRows(parsed.rows);
+
+      const filterOptions = await fetchFilterOptions();
+      setOptions(filterOptions);
+      await refreshTable();
+
+      toast({
+        title: "Import selesai",
+        description:
+          parsed.errors.length > 0
+            ? `${parsed.rows.length} baris berhasil diproses, ${parsed.errors.length} baris dilewati.`
+            : `${parsed.rows.length} baris berhasil diinsert/update.`,
+      });
+
+      if (parsed.errors.length) {
+        toast({
+          title: "Sebagian baris dilewati",
+          description: parsed.errors.slice(0, 3).join(" | "),
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Import gagal",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setImportLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {!isAuthenticated ? (
@@ -331,6 +383,7 @@ export function MaintenancePage() {
             setDeleteOpen(true);
           }}
           onExport={handleExport}
+          onImport={handleImport}
           canManage={isAuthenticated}
           onRequestLogin={() =>
             toast({
@@ -338,6 +391,7 @@ export function MaintenancePage() {
               description: "Silakan login Supabase untuk membuka akses CRUD.",
             })
           }
+          importLoading={importLoading}
         />
       )}
 

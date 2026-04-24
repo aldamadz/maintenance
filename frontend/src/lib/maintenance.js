@@ -133,6 +133,16 @@ export async function createMaintenance(payload) {
   }
 }
 
+export async function upsertMaintenanceRows(rows) {
+  const { error } = await maintenanceDb.from("maintenance").upsert(rows, {
+    onConflict: "tanggal_maintenance,kode_aset",
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function updateMaintenance(id, payload) {
   const { error } = await maintenanceDb
     .from("maintenance")
