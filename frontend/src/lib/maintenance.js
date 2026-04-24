@@ -160,3 +160,22 @@ export async function deleteMaintenance(id) {
     throw error;
   }
 }
+
+export function subscribeToMaintenanceChanges(onChange) {
+  const channel = supabase
+    .channel(`maintenance-watch-${Math.random().toString(36).slice(2)}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: MAINTENANCE_SCHEMA,
+        table: "maintenance",
+      },
+      onChange,
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}

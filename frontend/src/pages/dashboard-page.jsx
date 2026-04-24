@@ -1,11 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Boxes, Clock3, Sparkles, Wrench } from "lucide-react";
 import { MaintenanceFilters } from "@/components/maintenance/maintenance-filters";
 import { DashboardCharts } from "@/components/maintenance/dashboard-charts";
 import { StatsCard } from "@/components/maintenance/stats-card";
 import { LoadingState } from "@/components/ui/loading-state";
 import { DEFAULT_FILTERS } from "@/lib/constants";
-import { fetchAvailableYears, fetchDashboardSummary, fetchFilterOptions } from "@/lib/maintenance";
+import {
+  fetchAvailableYears,
+  fetchDashboardSummary,
+  fetchFilterOptions,
+  subscribeToMaintenanceChanges,
+} from "@/lib/maintenance";
 import { formatMinutes } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 
@@ -15,42 +20,34 @@ export function DashboardPage() {
   const [yearOptions, setYearOptions] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const realtimeTimerRef = useRef(null);
 
-  useEffect(() => {
-    async function bootstrap() {
-      try {
-        setLoading(true);
-        const [filterOptions, dashboard] = await Promise.all([
-          fetchFilterOptions(),
-          fetchDashboardSummary(DEFAULT_FILTERS),
-        ]);
-        setOptions(filterOptions);
-        setSummary(dashboard);
-      } catch (error) {
+  const loadFilterOptions = useEffectEvent(async ({ showError = true } = {}) => {
+    try {
+      const filterOptions = await fetchFilterOptions();
+      setOptions(filterOptions);
+    } catch (error) {
+      if (showError) {
         toast({
           title: "Gagal memuat dashboard",
           description: error.message,
           variant: "destructive",
         });
-      } finally {
-        setLoading(false);
       }
     }
+  });
 
-    bootstrap();
-  }, []);
+  const loadYears = useEffectEvent(async ({ showError = true } = {}) => {
+    if (!filters.lokasi) {
+      setYearOptions([]);
+      return;
+    }
 
-  useEffect(() => {
-    async function loadYears() {
-      if (!filters.lokasi) {
-        setYearOptions([]);
-        return;
-      }
-
-      try {
-        const years = await fetchAvailableYears(filters.lokasi);
-        setYearOptions(years);
-      } catch (error) {
+    try {
+      const years = await fetchAvailableYears(filters.lokasi);
+      setYearOptions(years);
+    } catch (error) {
+      if (showError) {
         toast({
           title: "Gagal memuat tahun",
           description: error.message,
@@ -58,29 +55,64 @@ export function DashboardPage() {
         });
       }
     }
+  });
 
-    loadYears();
-  }, [filters.lokasi]);
-
-  useEffect(() => {
-    async function loadSummary() {
-      try {
+  const loadSummary = useEffectEvent(async ({ nextFilters = filters, showLoading = true, showError = true } = {}) => {
+    try {
+      if (showLoading) {
         setLoading(true);
-        const result = await fetchDashboardSummary(filters);
-        setSummary(result);
-      } catch (error) {
+      }
+
+      const result = await fetchDashboardSummary(nextFilters);
+      setSummary(result);
+    } catch (error) {
+      if (showError) {
         toast({
           title: "Gagal memuat ringkasan",
           description: error.message,
           variant: "destructive",
         });
-      } finally {
+      }
+    } finally {
+      if (showLoading) {
         setLoading(false);
       }
     }
+  });
 
+  useEffect(() => {
+    loadFilterOptions();
+  }, [loadFilterOptions]);
+
+  useEffect(() => {
+    loadYears();
+  }, [filters.lokasi, loadYears]);
+
+  useEffect(() => {
     loadSummary();
-  }, [filters]);
+  }, [filters, loadSummary]);
+
+  const handleRealtimeRefresh = useEffectEvent(async () => {
+    await Promise.all([
+      loadFilterOptions({ showError: false }),
+      loadYears({ showError: false }),
+      loadSummary({ showLoading: false, showError: false }),
+    ]);
+  });
+
+  useEffect(() => {
+    const unsubscribe = subscribeToMaintenanceChanges(() => {
+      window.clearTimeout(realtimeTimerRef.current);
+      realtimeTimerRef.current = window.setTimeout(() => {
+        handleRealtimeRefresh();
+      }, 250);
+    });
+
+    return () => {
+      window.clearTimeout(realtimeTimerRef.current);
+      unsubscribe();
+    };
+  }, [handleRealtimeRefresh]);
 
   function handleFilterChange(field, value) {
     setFilters((current) => {

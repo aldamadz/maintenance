@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
   createMaintenance,
@@ -8,6 +8,7 @@ import {
   fetchFilterOptions,
   fetchMaintenanceForExport,
   fetchMaintenanceList,
+  subscribeToMaintenanceChanges,
   upsertMaintenanceRows,
   updateMaintenance,
 } from "@/lib/maintenance";
@@ -42,6 +43,7 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+  const realtimeTimerRef = useRef(null);
   const deferredSearch = useDeferredValue(filters.search);
 
   const effectiveFilters = useMemo(
@@ -52,12 +54,12 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
     [deferredSearch, filters],
   );
 
-  useEffect(() => {
-    async function bootstrap() {
-      try {
-        const filterOptions = await fetchFilterOptions();
-        setOptions(filterOptions);
-      } catch (error) {
+  const loadFilterOptions = useEffectEvent(async ({ showError = true } = {}) => {
+    try {
+      const filterOptions = await fetchFilterOptions();
+      setOptions(filterOptions);
+    } catch (error) {
+      if (showError) {
         toast({
           title: "Gagal memuat filter",
           description: error.message,
@@ -65,21 +67,19 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
         });
       }
     }
+  });
 
-    bootstrap();
-  }, []);
+  const loadYears = useEffectEvent(async ({ showError = true } = {}) => {
+    if (!filters.lokasi) {
+      setYearOptions([]);
+      return;
+    }
 
-  useEffect(() => {
-    async function loadYears() {
-      if (!filters.lokasi) {
-        setYearOptions([]);
-        return;
-      }
-
-      try {
-        const years = await fetchAvailableYears(filters.lokasi);
-        setYearOptions(years);
-      } catch (error) {
+    try {
+      const years = await fetchAvailableYears(filters.lokasi);
+      setYearOptions(years);
+    } catch (error) {
+      if (showError) {
         toast({
           title: "Gagal memuat opsi tahun",
           description: error.message,
@@ -87,47 +87,48 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
         });
       }
     }
+  });
 
-    loadYears();
-  }, [filters.lokasi]);
-
-  useEffect(() => {
-    async function loadTable() {
-      try {
+  const loadTable = useEffectEvent(async ({ showLoading = true, showError = true } = {}) => {
+    try {
+      if (showLoading) {
         setLoading(true);
-        const result = await fetchMaintenanceList({
-          filters: effectiveFilters,
-          page,
-          pageSize,
-          sortColumn,
-          sortDirection,
-        });
-        setRows(result.data);
-        setTotal(result.count);
-      } catch (error) {
+      }
+
+      const result = await fetchMaintenanceList({
+        filters: effectiveFilters,
+        page,
+        pageSize,
+        sortColumn,
+        sortDirection,
+      });
+      setRows(result.data);
+      setTotal(result.count);
+    } catch (error) {
+      if (showError) {
         toast({
           title: "Gagal memuat data maintenance",
           description: error.message,
           variant: "destructive",
         });
-      } finally {
+      }
+    } finally {
+      if (showLoading) {
         setLoading(false);
       }
     }
+  });
 
-    loadTable();
-  }, [effectiveFilters, page, pageSize, sortColumn, sortDirection]);
+  const loadSummary = useEffectEvent(async ({ showError = true } = {}) => {
+    if (!showAssetSummary) {
+      return;
+    }
 
-  useEffect(() => {
-    async function loadSummary() {
-      if (!showAssetSummary) {
-        return;
-      }
-
-      try {
-        const result = await fetchDashboardSummary(effectiveFilters);
-        setSummary(result);
-      } catch (error) {
+    try {
+      const result = await fetchDashboardSummary(effectiveFilters);
+      setSummary(result);
+    } catch (error) {
+      if (showError) {
         toast({
           title: "Gagal memuat ringkasan aset",
           description: error.message,
@@ -135,9 +136,46 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
         });
       }
     }
+  });
 
+  useEffect(() => {
+    loadFilterOptions();
+  }, [loadFilterOptions]);
+
+  useEffect(() => {
+    loadYears();
+  }, [filters.lokasi, loadYears]);
+
+  useEffect(() => {
+    loadTable();
+  }, [effectiveFilters, page, pageSize, sortColumn, sortDirection, loadTable]);
+
+  useEffect(() => {
     loadSummary();
-  }, [effectiveFilters, showAssetSummary]);
+  }, [effectiveFilters, showAssetSummary, loadSummary]);
+
+  const handleRealtimeRefresh = useEffectEvent(async () => {
+    await Promise.all([
+      loadFilterOptions({ showError: false }),
+      loadYears({ showError: false }),
+      loadTable({ showLoading: false, showError: false }),
+      loadSummary({ showError: false }),
+    ]);
+  });
+
+  useEffect(() => {
+    const unsubscribe = subscribeToMaintenanceChanges(() => {
+      window.clearTimeout(realtimeTimerRef.current);
+      realtimeTimerRef.current = window.setTimeout(() => {
+        handleRealtimeRefresh();
+      }, 250);
+    });
+
+    return () => {
+      window.clearTimeout(realtimeTimerRef.current);
+      unsubscribe();
+    };
+  }, [handleRealtimeRefresh]);
 
   function handleFilterChange(field, value) {
     setPage(1);
@@ -182,15 +220,7 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
   }
 
   async function refreshTable() {
-    const result = await fetchMaintenanceList({
-      filters: effectiveFilters,
-      page,
-      pageSize,
-      sortColumn,
-      sortDirection,
-    });
-    setRows(result.data);
-    setTotal(result.count);
+    await loadTable({ showLoading: false });
   }
 
   async function handleSubmit(payload) {
