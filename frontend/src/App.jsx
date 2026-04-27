@@ -16,6 +16,18 @@ const MaintenancePage = lazy(() =>
   })),
 );
 
+const IndexPage = lazy(() =>
+  import("@/pages/index-page").then((module) => ({
+    default: module.IndexPage,
+  })),
+);
+
+const AssetsPage = lazy(() =>
+  import("@/pages/assets-page").then((module) => ({
+    default: module.AssetsPage,
+  })),
+);
+
 const LoginPage = lazy(() =>
   import("@/pages/login-page").then((module) => ({
     default: module.LoginPage,
@@ -56,12 +68,13 @@ export default function App() {
     <Suspense fallback={<LoadingState label="Menyiapkan halaman..." />}>
       <Routes>
         <Route element={<PublicLayout />}>
-          <Route path="/" element={<MaintenancePage readOnly showAssetSummary />} />
+          <Route path="/" element={<IndexPage />} />
         </Route>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/maintenance" element={<MaintenancePage />} />
+          <Route path="/assets" element={<AssetsPage />} />
         </Route>
       </Routes>
     </Suspense>

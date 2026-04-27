@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
+  Boxes,
   ChevronRight,
   LayoutDashboard,
   LogOut,
@@ -23,6 +24,11 @@ const navigation = [
     label: "Data Maintenance",
     href: "/maintenance",
     icon: Wrench,
+  },
+  {
+    label: "Aset & Jadwal",
+    href: "/assets",
+    icon: Boxes,
   },
 ];
 

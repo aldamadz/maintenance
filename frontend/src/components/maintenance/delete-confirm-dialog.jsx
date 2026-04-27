@@ -11,18 +11,21 @@ export function DeleteConfirmDialog({
   open,
   onOpenChange,
   item,
+  title = "Hapus data maintenance",
+  description,
   loading = false,
   onConfirm,
 }) {
+  const resolvedDescription =
+    description ||
+    `Data untuk ${item?.nama_perangkat || "-"} akan dihapus permanen dari tabel maintenance.`;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Hapus data maintenance</DialogTitle>
-          <DialogDescription>
-            Data untuk <strong>{item?.nama_perangkat || "-"}</strong> akan dihapus
-            permanen dari tabel maintenance.
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{resolvedDescription}</DialogDescription>
         </DialogHeader>
 
         <div className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">
@@ -41,4 +44,3 @@ export function DeleteConfirmDialog({
     </Dialog>
   );
 }
-

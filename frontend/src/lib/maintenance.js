@@ -2,6 +2,42 @@ import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
 
 const maintenanceDb = supabase.schema(MAINTENANCE_SCHEMA);
 
+function buildAssetPayload(record) {
+  if (!record?.kode_aset || !record?.nama_perangkat) {
+    return null;
+  }
+
+  return {
+    kode_aset: record.kode_aset.trim(),
+    nama_perangkat: record.nama_perangkat.trim(),
+    tipe: record.tipe?.trim() || null,
+    lokasi: record.lokasi?.trim() || null,
+    status: "aktif",
+  };
+}
+
+async function syncAssetCatalog(records) {
+  const payload = records
+    .map(buildAssetPayload)
+    .filter(Boolean)
+    .reduce((collection, item) => {
+      collection.set(item.kode_aset, item);
+      return collection;
+    }, new Map());
+
+  if (!payload.size) {
+    return;
+  }
+
+  const { error } = await maintenanceDb
+    .from("assets")
+    .upsert([...payload.values()], { onConflict: "kode_aset" });
+
+  if (error) {
+    throw error;
+  }
+}
+
 function applyMaintenanceFilters(query, filters) {
   let nextQuery = query;
 
@@ -127,6 +163,7 @@ export async function fetchMaintenanceForExport(filters) {
 }
 
 export async function createMaintenance(payload) {
+  await syncAssetCatalog([payload]);
   const { error } = await maintenanceDb.from("maintenance").insert(payload);
   if (error) {
     throw error;
@@ -134,6 +171,7 @@ export async function createMaintenance(payload) {
 }
 
 export async function upsertMaintenanceRows(rows) {
+  await syncAssetCatalog(rows);
   const { error } = await maintenanceDb.from("maintenance").upsert(rows, {
     onConflict: "tanggal_maintenance,kode_aset",
   });
@@ -144,6 +182,7 @@ export async function upsertMaintenanceRows(rows) {
 }
 
 export async function updateMaintenance(id, payload) {
+  await syncAssetCatalog([payload]);
   const { error } = await maintenanceDb
     .from("maintenance")
     .update(payload)
