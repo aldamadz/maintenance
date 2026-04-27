@@ -36,6 +36,7 @@ create table if not exists maintenance.assets (
   tipe text,
   lokasi text,
   status text not null default 'aktif',
+  maintenance_interval_months integer not null default 12,
   created_at timestamp default now()
 );
 

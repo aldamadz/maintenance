@@ -20,6 +20,12 @@ export const SCHEDULE_STATUS_OPTIONS = [
   "dibatalkan",
 ];
 
+export const MAINTENANCE_INTERVAL_OPTIONS = [
+  { value: 6, label: "6 bulan sekali" },
+  { value: 12, label: "1 tahun sekali" },
+  { value: 24, label: "2 tahun sekali" },
+];
+
 export const DEFAULT_FORM_VALUES = {
   tanggal_maintenance: "",
   kode_aset: "",
@@ -37,6 +43,7 @@ export const DEFAULT_ASSET_FORM_VALUES = {
   tipe: "",
   lokasi: "",
   status: "aktif",
+  maintenance_interval_months: "12",
 };
 
 export const DEFAULT_SCHEDULE_FORM_VALUES = {

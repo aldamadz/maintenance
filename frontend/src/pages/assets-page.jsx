@@ -34,7 +34,7 @@ import { toast } from "@/hooks/use-toast";
 export function AssetsPage() {
   const [assetFilters, setAssetFilters] = useState(DEFAULT_ASSET_FILTERS);
   const [scheduleFilters, setScheduleFilters] = useState(DEFAULT_SCHEDULE_FILTERS);
-  const [assetOptions, setAssetOptions] = useState({ lokasi: [], status: [] });
+  const [assetOptions, setAssetOptions] = useState({ lokasi: [], status: [], intervals: [] });
   const [assetCatalog, setAssetCatalog] = useState([]);
   const [assetRows, setAssetRows] = useState([]);
   const [assetTotal, setAssetTotal] = useState(0);

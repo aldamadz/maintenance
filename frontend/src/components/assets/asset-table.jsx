@@ -11,7 +11,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PAGE_SIZE_OPTIONS } from "@/lib/constants";
+import { MAINTENANCE_INTERVAL_OPTIONS, PAGE_SIZE_OPTIONS } from "@/lib/constants";
+import { formatDate } from "@/lib/utils";
 
 function getStatusTone(status) {
   if (status === "aktif") {
@@ -27,6 +28,13 @@ function getStatusTone(status) {
   }
 
   return "bg-muted text-muted-foreground";
+}
+
+function getIntervalLabel(months) {
+  return (
+    MAINTENANCE_INTERVAL_OPTIONS.find((option) => option.value === Number(months))?.label ||
+    "-"
+  );
 }
 
 export function AssetTable({
@@ -68,13 +76,16 @@ export function AssetTable({
       <CardContent className="p-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
         {data.length ? (
           <>
-            <Table wrapperClassName="lg:min-h-0 lg:flex-1" className="min-w-[780px]">
+            <Table wrapperClassName="lg:min-h-0 lg:flex-1" className="min-w-[1080px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="sticky top-0 z-10 bg-card">Kode Aset</TableHead>
                   <TableHead className="sticky top-0 z-10 bg-card">Perangkat</TableHead>
                   <TableHead className="sticky top-0 z-10 bg-card">Lokasi</TableHead>
                   <TableHead className="sticky top-0 z-10 bg-card">Status</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-card">Maintenance Terakhir</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-card">Interval</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-card">Berikutnya</TableHead>
                   {showActions ? (
                     <TableHead className="sticky top-0 z-10 bg-card text-right">
                       Aksi
@@ -99,6 +110,9 @@ export function AssetTable({
                     <TableCell>
                       <Badge className={getStatusTone(asset.status)}>{asset.status}</Badge>
                     </TableCell>
+                    <TableCell>{formatDate(asset.last_maintenance_date)}</TableCell>
+                    <TableCell>{getIntervalLabel(asset.maintenance_interval_months)}</TableCell>
+                    <TableCell>{formatDate(asset.next_maintenance_date)}</TableCell>
                     {showActions ? (
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

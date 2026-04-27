@@ -1,6 +1,25 @@
 import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
+import { addMonths, format } from "date-fns";
 
 const assetsDb = supabase.schema(MAINTENANCE_SCHEMA);
+
+function toDateString(value) {
+  if (!value) {
+    return null;
+  }
+
+  return format(addMonths(new Date(value), 0), "yyyy-MM-dd");
+}
+
+function buildMaintenanceLookup(records) {
+  return (records || []).reduce((lookup, item) => {
+    if (!lookup.has(item.kode_aset)) {
+      lookup.set(item.kode_aset, item.tanggal_maintenance);
+    }
+
+    return lookup;
+  }, new Map());
+}
 
 function applyAssetFilters(query, filters) {
   let nextQuery = query;
@@ -59,8 +78,42 @@ export async function fetchAssetList({
     throw error;
   }
 
+  const assetRows = data || [];
+  const assetCodes = assetRows.map((item) => item.kode_aset).filter(Boolean);
+
+  if (!assetCodes.length) {
+    return {
+      data: assetRows,
+      count: count || 0,
+    };
+  }
+
+  const { data: maintenanceRows, error: maintenanceError } = await assetsDb
+    .from("maintenance")
+    .select("kode_aset,tanggal_maintenance")
+    .in("kode_aset", assetCodes)
+    .order("tanggal_maintenance", { ascending: false });
+
+  if (maintenanceError) {
+    throw maintenanceError;
+  }
+
+  const maintenanceLookup = buildMaintenanceLookup(maintenanceRows);
+  const enrichedData = assetRows.map((asset) => {
+    const lastMaintenanceDate = maintenanceLookup.get(asset.kode_aset) || null;
+    const intervalMonths = Number(asset.maintenance_interval_months || 12);
+
+    return {
+      ...asset,
+      last_maintenance_date: lastMaintenanceDate,
+      next_maintenance_date: lastMaintenanceDate
+        ? toDateString(addMonths(new Date(lastMaintenanceDate), intervalMonths))
+        : null,
+    };
+  });
+
   return {
-    data: data || [],
+    data: enrichedData,
     count: count || 0,
   };
 }
@@ -68,7 +121,7 @@ export async function fetchAssetList({
 export async function fetchAssetOptions() {
   const { data, error } = await assetsDb
     .from("assets")
-    .select("lokasi,status")
+    .select("lokasi,status,maintenance_interval_months")
     .limit(1000);
 
   if (error) {
@@ -77,14 +130,18 @@ export async function fetchAssetOptions() {
 
   const lokasi = [...new Set((data || []).map((item) => item.lokasi).filter(Boolean))].sort();
   const status = [...new Set((data || []).map((item) => item.status).filter(Boolean))].sort();
+  const intervals = [...new Set((data || [])
+    .map((item) => item.maintenance_interval_months)
+    .filter(Boolean))]
+    .sort((a, b) => a - b);
 
-  return { lokasi, status };
+  return { lokasi, status, intervals };
 }
 
 export async function fetchAssetCatalog() {
   const { data, error } = await assetsDb
     .from("assets")
-    .select("id,kode_aset,nama_perangkat,lokasi,tipe,status")
+    .select("id,kode_aset,nama_perangkat,lokasi,tipe,status,maintenance_interval_months")
     .order("kode_aset", { ascending: true })
     .limit(1000);
 

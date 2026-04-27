@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ASSET_STATUS_OPTIONS, DEFAULT_ASSET_FORM_VALUES } from "@/lib/constants";
+import {
+  ASSET_STATUS_OPTIONS,
+  DEFAULT_ASSET_FORM_VALUES,
+  MAINTENANCE_INTERVAL_OPTIONS,
+} from "@/lib/constants";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +22,7 @@ function normalizeAssetValues(values) {
     tipe: values?.tipe || "",
     lokasi: values?.lokasi || "",
     status: values?.status || "aktif",
+    maintenance_interval_months: values?.maintenance_interval_months?.toString() || "12",
   };
 }
 
@@ -80,6 +85,7 @@ export function AssetFormDialog({
       tipe: formValues.tipe.trim() || null,
       lokasi: formValues.lokasi.trim() || null,
       status: formValues.status,
+      maintenance_interval_months: Number(formValues.maintenance_interval_months || 12),
     });
   }
 
@@ -151,6 +157,22 @@ export function AssetFormDialog({
               {ASSET_STATUS_OPTIONS.map((status) => (
                 <option key={status} value={status}>
                   {status}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold">Interval maintenance</label>
+            <Select
+              value={formValues.maintenance_interval_months}
+              onChange={(event) =>
+                updateField("maintenance_interval_months", event.target.value)
+              }
+            >
+              {MAINTENANCE_INTERVAL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </Select>
