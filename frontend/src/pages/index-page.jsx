@@ -298,7 +298,7 @@ export function IndexPage() {
           />
         )
       ) : (
-        <MaintenancePage readOnly />
+        <MaintenancePage readOnly externalFilterControls />
       )}
     </div>
   );

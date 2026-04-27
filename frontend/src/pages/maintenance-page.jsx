@@ -24,7 +24,11 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { isIgnorableSupabaseAbortError } from "@/lib/utils";
 import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
 
-export function MaintenancePage({ readOnly = false, showAssetSummary = false }) {
+export function MaintenancePage({
+  readOnly = false,
+  showAssetSummary = false,
+  externalFilterControls = false,
+}) {
   const { isAuthenticated } = useAuth();
   const isPublicView = readOnly && showAssetSummary;
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -430,6 +434,22 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
         </Card>
       ) : null}
 
+      {externalFilterControls ? (
+        <div className="shrink-0 rounded-3xl border border-border/70 bg-card/75 p-4 shadow-panel">
+          <div className="flex items-center justify-end">
+            <MaintenanceFilters
+              filters={filters}
+              onChange={handleFilterChange}
+              onReset={handleResetFilters}
+              lokasiOptions={options.lokasi}
+              yearOptions={yearOptions}
+              activityOptions={options.jenisKegiatan}
+              showSearch
+            />
+          </div>
+        </div>
+      ) : null}
+
       {loading && !rows.length ? (
         <div className="lg:flex lg:min-h-0 lg:flex-1 lg:items-center lg:justify-center">
           <LoadingState label="Memuat tabel maintenance..." />
@@ -494,7 +514,7 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
           showManageActions={!readOnly}
           showExport
           showImport={!readOnly}
-          filterControls={
+          filterControls={externalFilterControls ? null : (
             <MaintenanceFilters
               filters={filters}
               onChange={handleFilterChange}
@@ -504,7 +524,7 @@ export function MaintenancePage({ readOnly = false, showAssetSummary = false }) 
               activityOptions={options.jenisKegiatan}
               showSearch
             />
-          }
+          )}
         />
       )}
 
