@@ -1,4 +1,5 @@
-import { CalendarPlus2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { addMonths, isBefore, parseISO, startOfDay } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,8 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { MAINTENANCE_INTERVAL_OPTIONS, PAGE_SIZE_OPTIONS } from "@/lib/constants";
-import { formatDate } from "@/lib/utils";
+import { PAGE_SIZE_OPTIONS } from "@/lib/constants";
+import { cn, formatDate } from "@/lib/utils";
 
 function getStatusTone(status) {
   if (status === "aktif") {
@@ -30,11 +31,36 @@ function getStatusTone(status) {
   return "bg-muted text-muted-foreground";
 }
 
-function getIntervalLabel(months) {
-  return (
-    MAINTENANCE_INTERVAL_OPTIONS.find((option) => option.value === Number(months))?.label ||
-    "-"
-  );
+function getNextMaintenanceState(nextMaintenanceDate) {
+  if (!nextMaintenanceDate) {
+    return null;
+  }
+
+  const today = startOfDay(new Date());
+  const nextDate = parseISO(nextMaintenanceDate);
+  const warningThreshold = addMonths(today, 3);
+
+  if (isBefore(nextDate, today)) {
+    return {
+      label: "Lewat",
+      tone: "border-destructive/25 bg-destructive/12 text-destructive",
+      textTone: "text-destructive",
+      rowTone: "!bg-destructive/10 hover:!bg-destructive/10",
+      cellTone: "bg-destructive/10",
+    };
+  }
+
+  if (nextDate <= warningThreshold) {
+    return {
+      label: "Mendekati",
+      tone: "border-amber-500/25 bg-amber-500/12 text-amber-700 dark:text-amber-300",
+      textTone: "text-amber-700 dark:text-amber-300",
+      rowTone: "!bg-amber-500/10 hover:!bg-amber-500/10",
+      cellTone: "bg-amber-500/10",
+    };
+  }
+
+  return null;
 }
 
 export function AssetTable({
@@ -50,7 +76,6 @@ export function AssetTable({
   onCreate,
   onEdit,
   onDelete,
-  onSchedule,
   showCreate = false,
   showActions = false,
 }) {
@@ -84,7 +109,6 @@ export function AssetTable({
                   <TableHead className="sticky top-0 z-10 bg-card">Lokasi</TableHead>
                   <TableHead className="sticky top-0 z-10 bg-card">Status</TableHead>
                   <TableHead className="sticky top-0 z-10 bg-card">Maintenance Terakhir</TableHead>
-                  <TableHead className="sticky top-0 z-10 bg-card">Interval</TableHead>
                   <TableHead className="sticky top-0 z-10 bg-card">Berikutnya</TableHead>
                   {showActions ? (
                     <TableHead className="sticky top-0 z-10 bg-card text-right">
@@ -95,59 +119,69 @@ export function AssetTable({
               </TableHeader>
 
               <TableBody>
-                {data.map((asset) => (
-                  <TableRow key={asset.id}>
-                    <TableCell className="font-semibold">{asset.kode_aset}</TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-semibold">{asset.nama_perangkat}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {asset.tipe || "Tanpa tipe"}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>{asset.lokasi || "-"}</TableCell>
-                    <TableCell>
-                      <Badge className={getStatusTone(asset.status)}>{asset.status}</Badge>
-                    </TableCell>
-                    <TableCell>{formatDate(asset.last_maintenance_date)}</TableCell>
-                    <TableCell>{getIntervalLabel(asset.maintenance_interval_months)}</TableCell>
-                    <TableCell>{formatDate(asset.next_maintenance_date)}</TableCell>
-                    {showActions ? (
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            disabled={!canManage}
-                            onClick={() => onSchedule?.(asset)}
-                            title="Buat jadwal"
-                          >
-                            <CalendarPlus2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            disabled={!canManage}
-                            onClick={() => onEdit?.(asset)}
-                            title="Edit aset"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="destructive"
-                            disabled={!canManage}
-                            onClick={() => onDelete?.(asset)}
-                            title="Hapus aset"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                {data.map((asset) => {
+                  const nextMaintenanceState = getNextMaintenanceState(asset.next_maintenance_date);
+                  const cellTone = nextMaintenanceState?.cellTone;
+
+                  return (
+                    <TableRow key={asset.id} className={cn(nextMaintenanceState?.rowTone)}>
+                      <TableCell className={cn("font-semibold", cellTone)}>{asset.kode_aset}</TableCell>
+                      <TableCell className={cellTone}>
+                        <div>
+                          <p className="font-semibold">{asset.nama_perangkat}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {asset.tipe || "Tanpa tipe"}
+                          </p>
                         </div>
                       </TableCell>
-                    ) : null}
-                  </TableRow>
-                ))}
+                      <TableCell className={cellTone}>{asset.lokasi || "-"}</TableCell>
+                      <TableCell className={cellTone}>
+                        <Badge className={getStatusTone(asset.status)}>{asset.status}</Badge>
+                      </TableCell>
+                      <TableCell className={cellTone}>{formatDate(asset.last_maintenance_date)}</TableCell>
+                      <TableCell className={cellTone}>
+                        {asset.next_maintenance_date ? (
+                          <div className="flex flex-col gap-1">
+                            <span className={nextMaintenanceState?.textTone || "text-foreground"}>
+                              {formatDate(asset.next_maintenance_date)}
+                            </span>
+                            {nextMaintenanceState ? (
+                              <Badge className={cn("w-fit border", nextMaintenanceState.tone)}>
+                                {nextMaintenanceState.label}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
+                      {showActions ? (
+                        <TableCell className={cn("text-right", cellTone)}>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              disabled={!canManage}
+                              onClick={() => onEdit?.(asset)}
+                              title="Edit aset"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="destructive"
+                              disabled={!canManage}
+                              onClick={() => onDelete?.(asset)}
+                              title="Hapus aset"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
 
@@ -192,7 +226,7 @@ export function AssetTable({
           <div className="p-6">
             <EmptyState
               title="Belum ada aset"
-              description="Tambahkan master aset agar perangkat bisa dijadwalkan maintenance."
+              description="Tambahkan master aset agar interval maintenance bisa dipantau."
             />
           </div>
         )}

@@ -4,4 +4,7 @@ frontend/node_modules
 frontend/dist
 node_modules
 *.log
-
+docker-compose.frontend.yml
+Maintenance Perangkat Kerja.xlsx
+AGENTS.md
+CODEX.md

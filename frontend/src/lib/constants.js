@@ -21,9 +21,9 @@ export const SCHEDULE_STATUS_OPTIONS = [
 ];
 
 export const MAINTENANCE_INTERVAL_OPTIONS = [
-  { value: 6, label: "6 bulan sekali" },
-  { value: 12, label: "1 tahun sekali" },
-  { value: 24, label: "2 tahun sekali" },
+  { value: 6, label: "6 bulan" },
+  { value: 12, label: "1 tahun" },
+  { value: 24, label: "2 tahun" },
 ];
 
 export const DEFAULT_FORM_VALUES = {

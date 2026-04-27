@@ -95,7 +95,7 @@ export function AssetFormDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Kelola master aset agar penjadwalan maintenance lebih terstruktur.
+            Kelola master aset dan interval maintenance rutinnya.
           </DialogDescription>
         </DialogHeader>
 

@@ -203,16 +203,6 @@ export function IndexPage() {
           }, 250);
         },
       )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: MAINTENANCE_SCHEMA, table: "maintenance_schedule" },
-        () => {
-          window.clearTimeout(realtimeTimerRef.current);
-          realtimeTimerRef.current = window.setTimeout(() => {
-            setRealtimeTick((current) => current + 1);
-          }, 250);
-        },
-      )
       .subscribe();
 
     return () => {
@@ -271,7 +261,7 @@ export function IndexPage() {
               {maintenanceSummary?.total_maintenance ?? 0}
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Jadwal aktif: {assetSummary?.planned_schedules ?? 0}
+              Perlu maintenance: {assetSummary?.due_assets ?? 0}
             </p>
           </CardContent>
         </Card>

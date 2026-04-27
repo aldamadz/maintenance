@@ -21,6 +21,78 @@ function buildMaintenanceLookup(records) {
   }, new Map());
 }
 
+async function fetchMaintenanceLookupByAssetCodes(assetCodes) {
+  if (!assetCodes.length) {
+    return new Map();
+  }
+
+  const { data: maintenanceRows, error: maintenanceError } = await assetsDb
+    .from("maintenance")
+    .select("kode_aset,tanggal_maintenance")
+    .in("kode_aset", assetCodes)
+    .order("tanggal_maintenance", { ascending: false });
+
+  if (maintenanceError) {
+    throw maintenanceError;
+  }
+
+  return buildMaintenanceLookup(maintenanceRows);
+}
+
+function enrichAssetsWithMaintenance(assetRows, maintenanceLookup) {
+  return assetRows.map((asset) => {
+    const lastMaintenanceDate = maintenanceLookup.get(asset.kode_aset) || null;
+    const intervalMonths = Number(asset.maintenance_interval_months || 12);
+
+    return {
+      ...asset,
+      last_maintenance_date: lastMaintenanceDate,
+      next_maintenance_date: lastMaintenanceDate
+        ? toDateString(addMonths(new Date(lastMaintenanceDate), intervalMonths))
+        : null,
+    };
+  });
+}
+
+function getNextMaintenancePriority(nextMaintenanceDate) {
+  if (!nextMaintenanceDate) {
+    return 2;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const warningThreshold = format(addMonths(new Date(), 3), "yyyy-MM-dd");
+
+  if (nextMaintenanceDate < today) {
+    return 0;
+  }
+
+  if (nextMaintenanceDate <= warningThreshold) {
+    return 1;
+  }
+
+  return 2;
+}
+
+function sortAssetsByMaintenanceUrgency(assetRows) {
+  return [...assetRows].sort((left, right) => {
+    const leftPriority = getNextMaintenancePriority(left.next_maintenance_date);
+    const rightPriority = getNextMaintenancePriority(right.next_maintenance_date);
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    const leftDate = left.next_maintenance_date || "9999-12-31";
+    const rightDate = right.next_maintenance_date || "9999-12-31";
+
+    if (leftDate !== rightDate) {
+      return leftDate.localeCompare(rightDate);
+    }
+
+    return (left.kode_aset || "").localeCompare(right.kode_aset || "");
+  });
+}
+
 function applyAssetFilters(query, filters) {
   let nextQuery = query;
 
@@ -61,14 +133,10 @@ export async function fetchAssetList({
   page = 1,
   pageSize = 10,
 }) {
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-
   let query = assetsDb
     .from("assets")
     .select("*", { count: "exact" })
-    .order("kode_aset", { ascending: true })
-    .range(from, to);
+    .order("kode_aset", { ascending: true });
 
   query = applyAssetFilters(query, filters);
 
@@ -88,32 +156,14 @@ export async function fetchAssetList({
     };
   }
 
-  const { data: maintenanceRows, error: maintenanceError } = await assetsDb
-    .from("maintenance")
-    .select("kode_aset,tanggal_maintenance")
-    .in("kode_aset", assetCodes)
-    .order("tanggal_maintenance", { ascending: false });
-
-  if (maintenanceError) {
-    throw maintenanceError;
-  }
-
-  const maintenanceLookup = buildMaintenanceLookup(maintenanceRows);
-  const enrichedData = assetRows.map((asset) => {
-    const lastMaintenanceDate = maintenanceLookup.get(asset.kode_aset) || null;
-    const intervalMonths = Number(asset.maintenance_interval_months || 12);
-
-    return {
-      ...asset,
-      last_maintenance_date: lastMaintenanceDate,
-      next_maintenance_date: lastMaintenanceDate
-        ? toDateString(addMonths(new Date(lastMaintenanceDate), intervalMonths))
-        : null,
-    };
-  });
+  const maintenanceLookup = await fetchMaintenanceLookupByAssetCodes(assetCodes);
+  const enrichedData = enrichAssetsWithMaintenance(assetRows, maintenanceLookup);
+  const sortedData = sortAssetsByMaintenanceUrgency(enrichedData);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize;
 
   return {
-    data: enrichedData,
+    data: sortedData.slice(from, to),
     count: count || 0,
   };
 }
@@ -153,51 +203,33 @@ export async function fetchAssetCatalog() {
 }
 
 export async function fetchAssetSummary(filters = {}) {
-  let assetQuery = assetsDb
-    .from("assets")
-    .select("id", { count: "exact", head: true });
+  let assetQuery = assetsDb.from("assets").select(
+    "id,kode_aset,status,maintenance_interval_months,lokasi,nama_perangkat,tipe",
+  );
 
   assetQuery = applyAssetFilters(assetQuery, filters);
 
-  const { count: totalAssets, error: assetError } = await assetQuery;
+  const { data: assetRows, error: assetError } = await assetQuery;
 
   if (assetError) {
     throw assetError;
   }
 
-  let activeQuery = assetsDb
-    .from("assets")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "aktif");
-
-  if (filters.lokasi) {
-    activeQuery = activeQuery.eq("lokasi", filters.lokasi);
-  }
-
-  const { count: activeAssets, error: activeError } = await activeQuery;
-
-  if (activeError) {
-    throw activeError;
-  }
-
+  const normalizedAssets = assetRows || [];
+  const assetCodes = normalizedAssets.map((item) => item.kode_aset).filter(Boolean);
+  const maintenanceLookup = await fetchMaintenanceLookupByAssetCodes(assetCodes);
+  const enrichedAssets = enrichAssetsWithMaintenance(normalizedAssets, maintenanceLookup);
   const today = new Date().toISOString().slice(0, 10);
-  const {
-    count: plannedSchedules,
-    error: scheduleError,
-  } = await assetsDb
-    .from("maintenance_schedule")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "terjadwal")
-    .gte("tanggal_jadwal", today);
 
-  if (scheduleError) {
-    throw scheduleError;
-  }
+  const activeAssets = enrichedAssets.filter((asset) => asset.status === "aktif").length;
+  const dueAssets = enrichedAssets.filter(
+    (asset) => !asset.next_maintenance_date || asset.next_maintenance_date <= today,
+  ).length;
 
   return {
-    total_assets: totalAssets || 0,
-    active_assets: activeAssets || 0,
-    planned_schedules: plannedSchedules || 0,
+    total_assets: enrichedAssets.length,
+    active_assets: activeAssets,
+    due_assets: dueAssets,
   };
 }
 
