@@ -27,6 +27,11 @@ export const ASSET_PRIORITY_OPTIONS = [
   { value: "normal", label: "Normal" },
 ];
 
+export const MAINTENANCE_STATUS_OPTIONS = [
+  { value: "selesai", label: "Selesai" },
+  { value: "planning", label: "Planning" },
+];
+
 export const DEFAULT_FORM_VALUES = {
   tanggal_maintenance: "",
   kode_aset: "",
@@ -35,6 +40,7 @@ export const DEFAULT_FORM_VALUES = {
   lokasi: "",
   jenis_kegiatan: "",
   durasi: "",
+  status: "selesai",
   catatan: "",
 };
 

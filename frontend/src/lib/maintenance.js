@@ -1,10 +1,7 @@
 import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
+import { resolveAssetCode } from "@/lib/asset-code";
 
 const maintenanceDb = supabase.schema(MAINTENANCE_SCHEMA);
-
-function normalizeAssetCode(value) {
-  return (value || "").trim().toUpperCase();
-}
 
 function pickPreferredText(nextValue, fallbackValue) {
   if (typeof nextValue === "string" && nextValue.trim()) {
@@ -24,7 +21,12 @@ function buildAssetPayload(record) {
   }
 
   return {
-    kode_aset: normalizeAssetCode(record.kode_aset),
+    kode_aset: resolveAssetCode({
+      kodeAset: record.kode_aset,
+      namaPerangkat: record.nama_perangkat,
+      lokasi: record.lokasi,
+      tipe: record.tipe,
+    }),
     nama_perangkat: record.nama_perangkat.trim(),
     tipe: record.tipe?.trim() || null,
     lokasi: record.lokasi?.trim() || null,
@@ -34,12 +36,18 @@ function buildAssetPayload(record) {
 function normalizeMaintenancePayload(payload) {
   return {
     ...payload,
-    kode_aset: normalizeAssetCode(payload.kode_aset),
+    kode_aset: resolveAssetCode({
+      kodeAset: payload.kode_aset,
+      namaPerangkat: payload.nama_perangkat,
+      lokasi: payload.lokasi,
+      tipe: payload.tipe,
+    }),
     nama_perangkat: payload.nama_perangkat?.trim() || "",
     tipe: payload.tipe?.trim() || null,
     lokasi: payload.lokasi?.trim() || null,
     jenis_kegiatan: payload.jenis_kegiatan || null,
     durasi: payload.durasi ?? null,
+    status: payload.status || "selesai",
     catatan: payload.catatan?.trim() || null,
   };
 }

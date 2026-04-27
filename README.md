@@ -41,6 +41,7 @@ Aplikasi web untuk pencatatan, pemantauan, dan analisis maintenance perangkat IT
 - filter tahun
 - filter range tanggal
 - filter jenis kegiatan
+- status `Selesai` dan `Planning`
 - export Excel
 - import Excel dengan mekanisme `upsert`
 
@@ -123,6 +124,7 @@ create table maintenance.maintenance (
   lokasi text,
   jenis_kegiatan text,
   durasi integer,
+  status text not null default 'selesai',
   catatan text,
   created_at timestamp default now()
 );
@@ -145,6 +147,7 @@ Migration yang tersedia:
 - `supabase/migrations/20260427_assets_schedule_patch.sql`
 - `supabase/migrations/20260427_asset_interval_patch.sql`
 - `supabase/migrations/20260427_asset_overview_rpc.sql`
+- `supabase/migrations/20260427_maintenance_planning_status.sql`
 
 Catatan:
 
@@ -152,6 +155,7 @@ Catatan:
 - `20260427_assets_schedule_patch.sql` adalah patch incremental untuk instance yang sudah berjalan
 - `20260427_asset_interval_patch.sql` menambah `maintenance_interval_months`
 - `20260427_asset_overview_rpc.sql` menambah fungsi ringkasan, filter, dan pagination aset di sisi database
+- `20260427_maintenance_planning_status.sql` menambah status `selesai/planning` untuk data maintenance
 
 ## Akses dan Auth
 
@@ -307,6 +311,9 @@ docker compose up -d --build
 
 - hanya untuk user login
 - file Excel/CSV diproses dengan `upsert`
+- jika `kode_aset` kosong atau `tidak diketahui`, sistem membuat kode otomatis berbasis nama perangkat/lokasi
+- jika `catatan` kosong, `-`, `–`, atau `—`, baris otomatis masuk sebagai `planning`
+- jika file memiliki kolom `status`, nilai `planning`, `rencana`, `terjadwal`, atau `planned` akan disimpan sebagai status `planning`
 - kunci `upsert`:
   - `tanggal_maintenance`
   - `kode_aset`

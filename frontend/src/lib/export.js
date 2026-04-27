@@ -9,6 +9,7 @@ export async function exportMaintenanceToExcel(rows) {
     Tipe: item.tipe || "-",
     Lokasi: item.lokasi || "-",
     "Jenis Kegiatan": item.jenis_kegiatan || "-",
+    Status: item.status === "planning" ? "Planning" : "Selesai",
     Durasi: formatMinutes(item.durasi),
     Catatan: item.catatan || "-",
     Dibuat: formatDate(item.created_at),

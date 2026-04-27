@@ -1,11 +1,8 @@
 import { addMonths, format } from "date-fns";
 import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
+import { resolveAssetCode } from "@/lib/asset-code";
 
 const assetsDb = supabase.schema(MAINTENANCE_SCHEMA);
-
-function normalizeAssetCode(value) {
-  return (value || "").trim().toUpperCase();
-}
 
 function toDateString(value) {
   if (!value) {
@@ -80,7 +77,12 @@ function applyAssetFilters(query, filters) {
 
 function buildMaintenanceLookup(records) {
   return (records || []).reduce((lookup, item) => {
-    const normalizedCode = normalizeAssetCode(item.kode_aset);
+    const normalizedCode = resolveAssetCode({
+      kodeAset: item.kode_aset,
+      namaPerangkat: item.nama_perangkat,
+      lokasi: item.lokasi,
+      tipe: item.tipe,
+    });
     const normalizedDate = toDateString(item.tanggal_maintenance);
 
     if (!normalizedCode || !normalizedDate) {
@@ -99,7 +101,8 @@ function buildMaintenanceLookup(records) {
 async function fetchLatestMaintenanceLookup(filters = {}) {
   let query = assetsDb
     .from("maintenance")
-    .select("kode_aset,tanggal_maintenance")
+    .select("kode_aset,nama_perangkat,tipe,lokasi,tanggal_maintenance,status")
+    .neq("status", "planning")
     .order("tanggal_maintenance", { ascending: false });
 
   if (filters.lokasi) {
@@ -117,7 +120,12 @@ async function fetchLatestMaintenanceLookup(filters = {}) {
 
 function enrichAssets(assetRows, maintenanceLookup) {
   return assetRows.map((asset) => {
-    const normalizedCode = normalizeAssetCode(asset.kode_aset);
+    const normalizedCode = resolveAssetCode({
+      kodeAset: asset.kode_aset,
+      namaPerangkat: asset.nama_perangkat,
+      lokasi: asset.lokasi,
+      tipe: asset.tipe,
+    });
     const lastMaintenanceDate = maintenanceLookup.get(normalizedCode) || null;
     const nextMaintenanceDate = lastMaintenanceDate
       ? toDateString(
@@ -131,7 +139,12 @@ function enrichAssets(assetRows, maintenanceLookup) {
 
     return {
       ...asset,
-      kode_aset: normalizeAssetCode(asset.kode_aset),
+      kode_aset: resolveAssetCode({
+        kodeAset: asset.kode_aset,
+        namaPerangkat: asset.nama_perangkat,
+        lokasi: asset.lokasi,
+        tipe: asset.tipe,
+      }),
       last_maintenance_date: lastMaintenanceDate,
       next_maintenance_date: nextMaintenanceDate,
       priority_label: priorityLabel,
@@ -186,7 +199,12 @@ async function fetchEnrichedAssets(filters = {}) {
 function normalizeAssetPayload(payload) {
   return {
     ...payload,
-    kode_aset: normalizeAssetCode(payload.kode_aset),
+    kode_aset: resolveAssetCode({
+      kodeAset: payload.kode_aset,
+      namaPerangkat: payload.nama_perangkat,
+      lokasi: payload.lokasi,
+      tipe: payload.tipe,
+    }),
     nama_perangkat: payload.nama_perangkat?.trim() || "",
     tipe: payload.tipe?.trim() || null,
     lokasi: payload.lokasi?.trim() || null,

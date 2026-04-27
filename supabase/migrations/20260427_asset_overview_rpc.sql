@@ -1,3 +1,6 @@
+alter table maintenance.maintenance
+add column if not exists status text not null default 'selesai';
+
 create or replace function maintenance.asset_overview_base(
   p_lokasi text default null,
   p_status text default null,
@@ -27,6 +30,7 @@ as $$
       upper(btrim(kode_aset)) as kode_aset,
       max(tanggal_maintenance) as last_maintenance_date
     from maintenance.maintenance
+    where coalesce(status, 'selesai') <> 'planning'
     group by upper(btrim(kode_aset))
   ),
   enriched as (

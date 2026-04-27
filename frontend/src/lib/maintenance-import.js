@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { resolveAssetCode } from "@/lib/asset-code";
 
 function normalizeHeader(header) {
   return String(header || "")
@@ -42,11 +43,34 @@ function normalizeText(value) {
   }
 
   const text = String(value).trim();
-  if (!text || text === "-") {
+  if (isPlaceholderText(text)) {
     return null;
   }
 
   return text;
+}
+
+function isPlaceholderText(value) {
+  const text = String(value ?? "").trim();
+  return !text || text === "-" || text === "–" || text === "—";
+}
+
+function isPlanningNote(value) {
+  return isPlaceholderText(value);
+}
+
+function normalizeStatus(value, planning) {
+  const text = normalizeText(value)?.toLowerCase();
+
+  if (["planning", "rencana", "terjadwal", "planned"].includes(text)) {
+    return "planning";
+  }
+
+  if (["selesai", "done", "completed"].includes(text)) {
+    return "selesai";
+  }
+
+  return planning ? "planning" : "selesai";
 }
 
 function normalizeRequiredText(value, fieldLabel) {
@@ -95,16 +119,24 @@ function mapRow(rawRow, XLSX) {
   const row = Object.fromEntries(
     Object.entries(rawRow).map(([key, value]) => [normalizeHeader(key), value]),
   );
+  const planning = isPlanningNote(row.catatan);
+  const status = normalizeStatus(row.status, planning);
 
   return {
     tanggal_maintenance: normalizeDate(row.tanggal_maintenance, XLSX),
-    kode_aset: normalizeRequiredText(row.kode_aset, "Kode aset"),
     nama_perangkat: normalizeRequiredText(row.nama_perangkat, "Nama perangkat"),
     tipe: normalizeText(row.tipe),
     lokasi: normalizeText(row.lokasi),
+    kode_aset: resolveAssetCode({
+      kodeAset: row.kode_aset,
+      namaPerangkat: row.nama_perangkat,
+      lokasi: row.lokasi,
+      tipe: row.tipe,
+    }),
     jenis_kegiatan: normalizeText(row.jenis_kegiatan),
     durasi: parseDurationToMinutes(row.durasi),
-    catatan: normalizeText(row.catatan),
+    status,
+    catatan: status === "planning" ? null : normalizeText(row.catatan),
   };
 }
 
@@ -143,5 +175,6 @@ export async function parseMaintenanceWorkbook(file) {
     rows,
     errors,
     totalRows: rawRows.length,
+    planningRows: rows.filter((row) => row.status === "planning").length,
   };
 }

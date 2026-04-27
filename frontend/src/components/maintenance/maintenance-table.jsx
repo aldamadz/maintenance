@@ -37,6 +37,22 @@ function SortIcon({ active, direction }) {
   );
 }
 
+function getMaintenanceStatus(item) {
+  return item.status === "planning" ? "planning" : "selesai";
+}
+
+function getMaintenanceStatusTone(status) {
+  if (status === "planning") {
+    return "border-amber-500/25 bg-amber-500/12 text-amber-700 dark:text-amber-300";
+  }
+
+  return "border-secondary/40 bg-secondary text-secondary-foreground";
+}
+
+function formatMaintenanceStatus(status) {
+  return status === "planning" ? "Planning" : "Selesai";
+}
+
 function MaintenanceCard({
   item,
   canManage,
@@ -55,6 +71,14 @@ function MaintenanceCard({
       </div>
 
       <div className="mt-4 grid gap-3 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">Status</span>
+          <Badge
+            className={getMaintenanceStatusTone(getMaintenanceStatus(item))}
+          >
+            {formatMaintenanceStatus(getMaintenanceStatus(item))}
+          </Badge>
+        </div>
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-foreground">Lokasi</span>
           <span className="text-right font-medium">{item.lokasi || "-"}</span>
@@ -127,7 +151,7 @@ export function MaintenanceTable({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <Card className="border-border/70 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+    <Card className="min-w-0 overflow-hidden border-border/70 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
       <CardHeader className="flex flex-col gap-4 border-b border-border/60 md:flex-row md:items-center md:justify-between">
         <div>
           <CardTitle>Data Maintenance</CardTitle>
@@ -181,7 +205,7 @@ export function MaintenanceTable({
         </div>
       </CardHeader>
 
-      <CardContent className="p-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+      <CardContent className="min-w-0 p-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
         {loading && !data.length ? (
           <div className="p-6">
             <LoadingState label="Memuat data maintenance..." />
@@ -201,9 +225,9 @@ export function MaintenanceTable({
               ))}
             </div>
 
-            <div className="hidden md:block lg:min-h-0 lg:flex-1">
+            <div className="hidden min-w-0 flex-1 flex-col overflow-hidden md:flex md:min-h-0">
               <Table
-                wrapperClassName="lg:min-h-0 lg:flex-1"
+                wrapperClassName="min-h-0 min-w-0 flex-1 border-b border-border/60"
                 className="min-w-[960px]"
               >
                 <TableHeader>
@@ -214,6 +238,7 @@ export function MaintenanceTable({
                       ["nama_perangkat", "Perangkat"],
                       ["lokasi", "Lokasi"],
                       ["jenis_kegiatan", "Kegiatan"],
+                      ["status", "Status"],
                       ["durasi", "Durasi"],
                     ].map(([column, label]) => (
                       <TableHead key={column} className="sticky top-0 z-10 bg-card">
@@ -261,6 +286,15 @@ export function MaintenanceTable({
                           "-"
                         )}
                       </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={getMaintenanceStatusTone(
+                            getMaintenanceStatus(item),
+                          )}
+                        >
+                          {formatMaintenanceStatus(getMaintenanceStatus(item))}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{formatMinutes(item.durasi)}</TableCell>
                       <TableCell className="max-w-xs">
                         <p className="line-clamp-2 text-sm text-muted-foreground">
@@ -295,40 +329,46 @@ export function MaintenanceTable({
               </Table>
             </div>
 
-            <div className="flex shrink-0 flex-col gap-4 border-t border-border/60 px-6 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-4 px-4 py-4 sm:px-6">
               <div className="text-sm text-muted-foreground">
                 Menampilkan {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, total)} dari {total} data
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="text-sm text-muted-foreground">Rows</label>
-                <select
-                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
-                  value={pageSize}
-                  onChange={(event) => onPageSizeChange(Number(event.target.value))}
-                >
-                  {PAGE_SIZE_OPTIONS.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  variant="outline"
-                  disabled={page <= 1}
-                  onClick={() => onPageChange(page - 1)}
-                >
-                  Sebelumnya
-                </Button>
-                <div className="text-sm font-semibold">
-                  Halaman {page} / {totalPages}
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-muted-foreground">Rows</label>
+                  <select
+                    className="h-10 min-w-20 rounded-xl border border-input bg-background px-3 text-sm"
+                    value={pageSize}
+                    onChange={(event) => onPageSizeChange(Number(event.target.value))}
+                  >
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <Button
-                  variant="outline"
-                  disabled={page >= totalPages}
-                  onClick={() => onPageChange(page + 1)}
-                >
-                  Berikutnya
-                </Button>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:flex-wrap sm:justify-end sm:gap-3">
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    disabled={page <= 1}
+                    onClick={() => onPageChange(page - 1)}
+                  >
+                    Sebelumnya
+                  </Button>
+                  <div className="text-center text-sm font-semibold sm:min-w-28">
+                    Halaman {page} / {totalPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    disabled={page >= totalPages}
+                    onClick={() => onPageChange(page + 1)}
+                  >
+                    Berikutnya
+                  </Button>
+                </div>
               </div>
             </div>
           </>

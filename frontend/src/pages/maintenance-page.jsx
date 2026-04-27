@@ -275,8 +275,8 @@ export function MaintenancePage() {
         title: "Import selesai",
         description:
           parsed.errors.length > 0
-            ? `${parsed.rows.length} baris berhasil diproses, ${parsed.errors.length} baris dilewati.`
-            : `${parsed.rows.length} baris berhasil diinsert/update.`,
+            ? `${parsed.rows.length} baris berhasil diproses (${parsed.planningRows} planning), ${parsed.errors.length} baris dilewati.`
+            : `${parsed.rows.length} baris berhasil diinsert/update (${parsed.planningRows} planning).`,
       });
 
       if (parsed.errors.length) {

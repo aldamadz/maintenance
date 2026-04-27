@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { DEFAULT_FORM_VALUES, ACTIVITY_OPTIONS } from "@/lib/constants";
+import {
+  ACTIVITY_OPTIONS,
+  DEFAULT_FORM_VALUES,
+  MAINTENANCE_STATUS_OPTIONS,
+} from "@/lib/constants";
+import { resolveAssetCode } from "@/lib/asset-code";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +27,7 @@ function normalizeFormValues(values) {
     lokasi: values?.lokasi || "",
     jenis_kegiatan: values?.jenis_kegiatan || "",
     durasi: values?.durasi?.toString() || "",
+    status: values?.status || "selesai",
     catatan: values?.catatan || "",
   };
 }
@@ -31,10 +37,6 @@ function validateForm(values) {
 
   if (!values.tanggal_maintenance) {
     nextErrors.tanggal_maintenance = "Tanggal maintenance wajib diisi.";
-  }
-
-  if (!values.kode_aset.trim()) {
-    nextErrors.kode_aset = "Kode aset wajib diisi.";
   }
 
   if (!values.nama_perangkat.trim()) {
@@ -89,12 +91,18 @@ export function MaintenanceFormDialog({
 
     await onSubmit({
       tanggal_maintenance: formValues.tanggal_maintenance,
-      kode_aset: formValues.kode_aset.trim().toUpperCase(),
+      kode_aset: resolveAssetCode({
+        kodeAset: formValues.kode_aset,
+        namaPerangkat: formValues.nama_perangkat,
+        lokasi: formValues.lokasi,
+        tipe: formValues.tipe,
+      }),
       nama_perangkat: formValues.nama_perangkat.trim(),
       tipe: formValues.tipe.trim() || null,
       lokasi: formValues.lokasi.trim() || null,
       jenis_kegiatan: formValues.jenis_kegiatan || null,
       durasi: formValues.durasi ? Number(formValues.durasi) : null,
+      status: formValues.status,
       catatan: formValues.catatan.trim() || null,
     });
   }
@@ -127,11 +135,11 @@ export function MaintenanceFormDialog({
             <Input
               value={formValues.kode_aset}
               onChange={(event) => updateField("kode_aset", event.target.value)}
-              placeholder="AST-001"
+              placeholder="AST-001 atau kosongkan jika tidak diketahui"
             />
-            {errors.kode_aset ? (
-              <p className="mt-1 text-xs text-destructive">{errors.kode_aset}</p>
-            ) : null}
+            <p className="mt-1 text-xs text-muted-foreground">
+              Jika kosong, sistem akan membuat kode aset otomatis untuk perangkat yang belum diketahui.
+            </p>
           </div>
 
           <div>
@@ -197,6 +205,20 @@ export function MaintenanceFormDialog({
             {errors.durasi ? (
               <p className="mt-1 text-xs text-destructive">{errors.durasi}</p>
             ) : null}
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold">Status</label>
+            <Select
+              value={formValues.status}
+              onChange={(event) => updateField("status", event.target.value)}
+            >
+              {MAINTENANCE_STATUS_OPTIONS.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </Select>
           </div>
 
           <div className="md:col-span-2">

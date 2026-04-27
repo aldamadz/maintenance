@@ -140,7 +140,7 @@ export function IndexPage() {
   }
 
   return (
-    <div className="space-y-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden lg:space-y-4">
+    <div className="min-w-0 space-y-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden lg:space-y-4">
       <div className="grid shrink-0 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <Card className="border-border/70">
           <CardContent className="p-6">
