@@ -74,5 +74,37 @@
     background-size: 32px 32px;
     background-image: theme(backgroundImage.grid);
   }
-}
 
+  .app-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--primary) / 0.55) hsl(var(--muted));
+  }
+
+  .app-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .app-scrollbar::-webkit-scrollbar-track {
+    border-radius: 9999px;
+    background: hsl(var(--muted));
+  }
+
+  .app-scrollbar::-webkit-scrollbar-thumb {
+    border: 2px solid hsl(var(--muted));
+    border-radius: 9999px;
+    background: linear-gradient(
+      180deg,
+      hsl(var(--primary) / 0.75),
+      hsl(var(--primary) / 0.55)
+    );
+  }
+
+  .app-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--primary) / 0.9),
+      hsl(var(--primary) / 0.7)
+    );
+  }
+}

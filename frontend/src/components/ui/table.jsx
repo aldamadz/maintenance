@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 export function Table({ className, wrapperClassName, ...props }) {
   return (
-    <div className={cn("w-full overflow-auto", wrapperClassName)}>
+    <div className={cn("app-scrollbar w-full overflow-auto", wrapperClassName)}>
       <table className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   );
