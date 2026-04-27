@@ -14,16 +14,17 @@ export const ASSET_STATUS_OPTIONS = [
   "nonaktif",
 ];
 
-export const SCHEDULE_STATUS_OPTIONS = [
-  "terjadwal",
-  "selesai",
-  "dibatalkan",
-];
-
 export const MAINTENANCE_INTERVAL_OPTIONS = [
   { value: 6, label: "6 bulan" },
   { value: 12, label: "1 tahun" },
   { value: 24, label: "2 tahun" },
+];
+
+export const ASSET_PRIORITY_OPTIONS = [
+  { value: "lewat", label: "Lewat" },
+  { value: "mendekati", label: "Mendekati" },
+  { value: "belum-ada-histori", label: "Belum ada histori" },
+  { value: "normal", label: "Normal" },
 ];
 
 export const DEFAULT_FORM_VALUES = {
@@ -46,14 +47,6 @@ export const DEFAULT_ASSET_FORM_VALUES = {
   maintenance_interval_months: "12",
 };
 
-export const DEFAULT_SCHEDULE_FORM_VALUES = {
-  asset_id: "",
-  tanggal_jadwal: "",
-  jenis_kegiatan: "",
-  status: "terjadwal",
-  catatan: "",
-};
-
 export const DEFAULT_FILTERS = {
   lokasi: "",
   tahun: "",
@@ -66,12 +59,9 @@ export const DEFAULT_FILTERS = {
 export const DEFAULT_ASSET_FILTERS = {
   lokasi: "",
   status: "",
+  maintenanceIntervalMonths: "",
+  priority: "",
   search: "",
-};
-
-export const DEFAULT_SCHEDULE_FILTERS = {
-  assetId: "",
-  status: "",
 };
 
 export const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];

@@ -1,12 +1,20 @@
-import { useEffect, useRef, useState } from "react";
-import { addMonths, isBefore, parseISO, startOfDay } from "date-fns";
-import { AlertTriangle, Boxes, ShieldCheck, Sparkles, Wrench } from "lucide-react";
+import { useEffect, useState } from "react";
+import { addMonths, parseISO, startOfDay } from "date-fns";
+import {
+  AlertTriangle,
+  Boxes,
+  Clock3,
+  ShieldCheck,
+  Sparkles,
+  Wrench,
+} from "lucide-react";
 import { MaintenanceFilters } from "@/components/maintenance/maintenance-filters";
 import { DashboardCharts } from "@/components/maintenance/dashboard-charts";
 import { StatsCard } from "@/components/maintenance/stats-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingState } from "@/components/ui/loading-state";
+import { useRealtimeTick } from "@/hooks/use-realtime-tick";
 import { DEFAULT_FILTERS } from "@/lib/constants";
 import { fetchAssetList, fetchAssetSummary } from "@/lib/assets";
 import {
@@ -16,28 +24,34 @@ import {
 } from "@/lib/maintenance";
 import { formatDate, isIgnorableSupabaseAbortError } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
 
-function getUrgencyState(nextMaintenanceDate) {
-  if (!nextMaintenanceDate) {
+function getUrgencyState(asset) {
+  if (asset.priority_label === "belum-ada-histori") {
     return {
       label: "Belum ada histori",
+      tone: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    };
+  }
+
+  if (!asset.next_maintenance_date) {
+    return {
+      label: "Normal",
       tone: "border-border bg-muted text-muted-foreground",
     };
   }
 
   const today = startOfDay(new Date());
-  const nextDate = parseISO(nextMaintenanceDate);
+  const nextDate = parseISO(asset.next_maintenance_date);
   const warningThreshold = addMonths(today, 3);
 
-  if (isBefore(nextDate, today)) {
+  if (nextDate <= today || asset.priority_label === "lewat") {
     return {
       label: "Lewat",
       tone: "border-destructive/25 bg-destructive/12 text-destructive",
     };
   }
 
-  if (nextDate <= warningThreshold) {
+  if (nextDate <= warningThreshold || asset.priority_label === "mendekati") {
     return {
       label: "Mendekati",
       tone: "border-amber-500/25 bg-amber-500/12 text-amber-700 dark:text-amber-300",
@@ -58,8 +72,10 @@ export function DashboardPage() {
   const [assetSummary, setAssetSummary] = useState(null);
   const [priorityAssets, setPriorityAssets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [realtimeTick, setRealtimeTick] = useState(0);
-  const realtimeTimerRef = useRef(null);
+  const realtimeTick = useRealtimeTick("maintenance-live-dashboard", [
+    "maintenance",
+    "assets",
+  ]);
 
   useEffect(() => {
     async function loadFilterOptions() {
@@ -115,6 +131,8 @@ export function DashboardPage() {
         const assetFilters = {
           lokasi: filters.lokasi || "",
           status: "",
+          maintenanceIntervalMonths: "",
+          priority: "",
           search: "",
         };
 
@@ -124,7 +142,7 @@ export function DashboardPage() {
           fetchAssetList({
             filters: assetFilters,
             page: 1,
-            pageSize: 5,
+            pageSize: 6,
           }),
         ]);
 
@@ -148,49 +166,6 @@ export function DashboardPage() {
 
     loadDashboardData();
   }, [filters, realtimeTick]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel(`maintenance-live-dashboard-${Math.random().toString(36).slice(2)}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: MAINTENANCE_SCHEMA,
-          table: "maintenance",
-        },
-        () => {
-          window.clearTimeout(realtimeTimerRef.current);
-          realtimeTimerRef.current = window.setTimeout(() => {
-            setRealtimeTick((current) => current + 1);
-          }, 250);
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: MAINTENANCE_SCHEMA,
-          table: "assets",
-        },
-        () => {
-          window.clearTimeout(realtimeTimerRef.current);
-          realtimeTimerRef.current = window.setTimeout(() => {
-            setRealtimeTick((current) => current + 1);
-          }, 250);
-        },
-      )
-      .subscribe((status) => {
-        if (status === "CHANNEL_ERROR") {
-          console.error("Dashboard realtime channel error");
-        }
-      });
-
-    return () => {
-      window.clearTimeout(realtimeTimerRef.current);
-      supabase.removeChannel(channel);
-    };
-  }, []);
 
   function handleFilterChange(field, value) {
     setFilters((current) => {
@@ -247,6 +222,7 @@ export function DashboardPage() {
             <StatsCard
               label="Total aset"
               value={assetSummary?.total_assets ?? summary?.total_aset ?? 0}
+              hint={`${assetSummary?.missing_history_assets ?? 0} tanpa histori`}
               icon={Boxes}
               tone="secondary"
             />
@@ -263,6 +239,7 @@ export function DashboardPage() {
             <StatsCard
               label="Perlu maintenance"
               value={assetSummary?.due_assets || 0}
+              hint={`${assetSummary?.overdue_assets || 0} lewat`}
               icon={AlertTriangle}
               tone="accent"
             />
@@ -279,18 +256,46 @@ export function DashboardPage() {
                 <div>
                   <CardTitle>Prioritas Maintenance</CardTitle>
                 </div>
-                <div className="rounded-2xl border border-border/70 bg-muted/35 px-4 py-3 md:min-w-[240px]">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-2xl bg-secondary/90 p-3 text-secondary-foreground">
-                      <Sparkles className="h-5 w-5" />
+                <div className="grid gap-3 md:min-w-[320px]">
+                  <div className="rounded-2xl border border-border/70 bg-muted/35 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-2xl bg-secondary/90 p-3 text-secondary-foreground">
+                        <Sparkles className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          Kegiatan Paling Sering
+                        </p>
+                        <p className="mt-1 text-base font-semibold capitalize">
+                          {summary?.kegiatan_paling_sering || "-"}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Kegiatan Paling Sering
-                      </p>
-                      <p className="mt-1 text-base font-semibold capitalize">
-                        {summary?.kegiatan_paling_sering || "-"}
-                      </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-border/70 bg-card px-4 py-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-2 text-muted-foreground">
+                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                        Lewat
+                      </span>
+                      <span className="font-semibold">{assetSummary?.overdue_assets || 0}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-2 text-muted-foreground">
+                        <Clock3 className="h-4 w-4 text-amber-600" />
+                        Mendekati
+                      </span>
+                      <span className="font-semibold">{assetSummary?.upcoming_assets || 0}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-2 text-muted-foreground">
+                        <Wrench className="h-4 w-4 text-sky-600" />
+                        Belum ada histori
+                      </span>
+                      <span className="font-semibold">
+                        {assetSummary?.missing_history_assets || 0}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -300,7 +305,7 @@ export function DashboardPage() {
               {priorityAssets.length ? (
                 <div className="grid gap-3 xl:grid-cols-2">
                   {priorityAssets.map((asset) => {
-                    const urgency = getUrgencyState(asset.next_maintenance_date);
+                    const urgency = getUrgencyState(asset);
 
                     return (
                       <div

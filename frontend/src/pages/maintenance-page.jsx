@@ -1,42 +1,33 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
+import { DeleteConfirmDialog } from "@/components/maintenance/delete-confirm-dialog";
+import { MaintenanceFilters } from "@/components/maintenance/maintenance-filters";
+import { MaintenanceFormDialog } from "@/components/maintenance/maintenance-form-dialog";
+import { MaintenanceTable } from "@/components/maintenance/maintenance-table";
+import { useRealtimeTick } from "@/hooks/use-realtime-tick";
+import { toast } from "@/hooks/use-toast";
+import { DEFAULT_FILTERS } from "@/lib/constants";
+import { exportMaintenanceToExcel } from "@/lib/export";
 import {
   createMaintenance,
   deleteMaintenance,
   fetchAvailableYears,
-  fetchDashboardSummary,
   fetchFilterOptions,
   fetchMaintenanceForExport,
   fetchMaintenanceList,
   upsertMaintenanceRows,
   updateMaintenance,
 } from "@/lib/maintenance";
-import { DEFAULT_FILTERS } from "@/lib/constants";
-import { exportMaintenanceToExcel } from "@/lib/export";
 import { parseMaintenanceWorkbook } from "@/lib/maintenance-import";
-import { toast } from "@/hooks/use-toast";
-import { MaintenanceFilters } from "@/components/maintenance/maintenance-filters";
-import { MaintenanceTable } from "@/components/maintenance/maintenance-table";
-import { MaintenanceFormDialog } from "@/components/maintenance/maintenance-form-dialog";
-import { DeleteConfirmDialog } from "@/components/maintenance/delete-confirm-dialog";
-import { Card, CardContent } from "@/components/ui/card";
-import { LoadingState } from "@/components/ui/loading-state";
 import { isIgnorableSupabaseAbortError } from "@/lib/utils";
-import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
 
-export function MaintenancePage({
-  readOnly = false,
-  showAssetSummary = false,
-  externalFilterControls = false,
-}) {
+export function MaintenancePage() {
   const { isAuthenticated } = useAuth();
-  const isPublicView = readOnly && showAssetSummary;
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [options, setOptions] = useState({ lokasi: [], jenisKegiatan: [] });
   const [yearOptions, setYearOptions] = useState([]);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
-  const [summary, setSummary] = useState(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [sortColumn, setSortColumn] = useState("tanggal_maintenance");
@@ -48,9 +39,8 @@ export function MaintenancePage({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
-  const [realtimeTick, setRealtimeTick] = useState(0);
-  const realtimeTimerRef = useRef(null);
   const deferredSearch = useDeferredValue(filters.search);
+  const realtimeTick = useRealtimeTick("maintenance-live-page", ["maintenance"]);
 
   const effectiveFilters = useMemo(
     () => ({
@@ -138,60 +128,6 @@ export function MaintenancePage({
     loadTable();
   }, [effectiveFilters, page, pageSize, sortColumn, sortDirection, realtimeTick]);
 
-  useEffect(() => {
-    async function loadSummary() {
-      if (!showAssetSummary) {
-        return;
-      }
-
-      try {
-        const result = await fetchDashboardSummary(effectiveFilters);
-        setSummary(result);
-      } catch (error) {
-        if (isIgnorableSupabaseAbortError(error)) {
-          return;
-        }
-
-        toast({
-          title: "Gagal memuat ringkasan aset",
-          description: error.message,
-          variant: "destructive",
-        });
-      }
-    }
-
-    loadSummary();
-  }, [effectiveFilters, showAssetSummary, realtimeTick]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel(`maintenance-live-page-${Math.random().toString(36).slice(2)}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: MAINTENANCE_SCHEMA,
-          table: "maintenance",
-        },
-        () => {
-          window.clearTimeout(realtimeTimerRef.current);
-          realtimeTimerRef.current = window.setTimeout(() => {
-            setRealtimeTick((current) => current + 1);
-          }, 250);
-        },
-      )
-      .subscribe((status) => {
-        if (status === "CHANNEL_ERROR") {
-          console.error("Maintenance realtime channel error");
-        }
-      });
-
-    return () => {
-      window.clearTimeout(realtimeTimerRef.current);
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
   function handleFilterChange(field, value) {
     setPage(1);
     setFilters((current) => {
@@ -247,14 +183,6 @@ export function MaintenancePage({
   }
 
   async function handleSubmit(payload) {
-    if (!isAuthenticated) {
-      toast({
-        title: "Login diperlukan",
-        description: "Silakan login Supabase untuk menambah atau mengubah data.",
-      });
-      return;
-    }
-
     try {
       setSubmitting(true);
       if (selectedRow?.id) {
@@ -287,14 +215,6 @@ export function MaintenancePage({
 
   async function handleDelete() {
     if (!selectedRow?.id) {
-      return;
-    }
-
-    if (!isAuthenticated) {
-      toast({
-        title: "Login diperlukan",
-        description: "Silakan login Supabase untuk menghapus data.",
-      });
       return;
     }
 
@@ -337,14 +257,6 @@ export function MaintenancePage({
   }
 
   async function handleImport(file) {
-    if (!isAuthenticated) {
-      toast({
-        title: "Login diperlukan",
-        description: "Silakan login Supabase untuk melakukan import data.",
-      });
-      return;
-    }
-
     try {
       setImportLoading(true);
       const parsed = await parseMaintenanceWorkbook(file);
@@ -387,167 +299,74 @@ export function MaintenancePage({
 
   return (
     <div className="space-y-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden lg:space-y-4">
-      {isPublicView ? (
-        <div className="grid shrink-0 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <Card className="border-border/70">
-            <CardContent className="p-6">
-              <h1 className="text-3xl font-extrabold tracking-tight">
-                Data maintenance perangkat IT
-              </h1>
-            </CardContent>
-          </Card>
+      <MaintenanceTable
+        data={rows}
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
+        loading={loading}
+        onSort={handleSort}
+        onPageChange={setPage}
+        onPageSizeChange={(value) => {
+          setPageSize(value);
+          setPage(1);
+        }}
+        onCreate={() => {
+          setSelectedRow(null);
+          setDialogOpen(true);
+        }}
+        onEdit={(row) => {
+          setSelectedRow(row);
+          setDialogOpen(true);
+        }}
+        onDelete={(row) => {
+          setSelectedRow(row);
+          setDeleteOpen(true);
+        }}
+        onExport={handleExport}
+        onImport={handleImport}
+        canManage={isAuthenticated}
+        onRequestLogin={() =>
+          toast({
+            title: "Login diperlukan",
+            description: "Silakan login Supabase untuk membuka akses CRUD.",
+          })
+        }
+        importLoading={importLoading}
+        showManageActions
+        showExport
+        showImport
+        filterControls={(
+          <MaintenanceFilters
+            filters={filters}
+            onChange={handleFilterChange}
+            onReset={handleResetFilters}
+            lokasiOptions={options.lokasi}
+            yearOptions={yearOptions}
+            activityOptions={options.jenisKegiatan}
+            showSearch
+          />
+        )}
+      />
 
-          <Card className="border-border/70">
-            <CardContent className="p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                Total aset
-              </p>
-              <h2 className="mt-3 text-3xl font-extrabold tracking-tight">
-                {summary?.total_aset ?? 0}
-              </h2>
-            </CardContent>
-          </Card>
+      <MaintenanceFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        initialValues={selectedRow}
+        lokasiOptions={options.lokasi}
+        onSubmit={handleSubmit}
+        loading={submitting}
+      />
 
-          <Card className="border-border/70">
-            <CardContent className="p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                Total maintenance
-              </p>
-              <h2 className="mt-3 text-3xl font-extrabold tracking-tight">
-                {summary?.total_maintenance ?? 0}
-              </h2>
-            </CardContent>
-          </Card>
-        </div>
-      ) : showAssetSummary ? (
-        <Card className="shrink-0 border-border/70">
-          <CardContent className="p-6">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                Total aset
-              </p>
-              <h1 className="mt-3 text-3xl font-extrabold tracking-tight">
-                {summary?.total_aset ?? 0}
-              </h1>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {externalFilterControls ? (
-        <div className="shrink-0 rounded-3xl border border-border/70 bg-card/75 p-4 shadow-panel">
-          <div className="flex items-center justify-end">
-            <MaintenanceFilters
-              filters={filters}
-              onChange={handleFilterChange}
-              onReset={handleResetFilters}
-              lokasiOptions={options.lokasi}
-              yearOptions={yearOptions}
-              activityOptions={options.jenisKegiatan}
-              showSearch
-            />
-          </div>
-        </div>
-      ) : null}
-
-      {loading && !rows.length ? (
-        <div className="lg:flex lg:min-h-0 lg:flex-1 lg:items-center lg:justify-center">
-          <LoadingState label="Memuat tabel maintenance..." />
-        </div>
-      ) : (
-        <MaintenanceTable
-          data={rows}
-          total={total}
-          page={page}
-          pageSize={pageSize}
-          sortColumn={sortColumn}
-          sortDirection={sortDirection}
-          onSort={handleSort}
-          onPageChange={setPage}
-          onPageSizeChange={(value) => {
-            setPageSize(value);
-            setPage(1);
-          }}
-          onCreate={() => {
-            if (!isAuthenticated) {
-              toast({
-                title: "Login diperlukan",
-                description: "Silakan login Supabase untuk menambah data maintenance.",
-              });
-              return;
-            }
-            setSelectedRow(null);
-            setDialogOpen(true);
-          }}
-          onEdit={(row) => {
-            if (!isAuthenticated) {
-              toast({
-                title: "Login diperlukan",
-                description: "Silakan login Supabase untuk mengubah data maintenance.",
-              });
-              return;
-            }
-            setSelectedRow(row);
-            setDialogOpen(true);
-          }}
-          onDelete={(row) => {
-            if (!isAuthenticated) {
-              toast({
-                title: "Login diperlukan",
-                description: "Silakan login Supabase untuk menghapus data maintenance.",
-              });
-              return;
-            }
-            setSelectedRow(row);
-            setDeleteOpen(true);
-          }}
-          onExport={handleExport}
-          onImport={handleImport}
-          canManage={!readOnly && isAuthenticated}
-          onRequestLogin={() =>
-            toast({
-              title: "Login diperlukan",
-              description: "Silakan login Supabase untuk membuka akses CRUD.",
-            })
-          }
-          importLoading={importLoading}
-          showManageActions={!readOnly}
-          showExport
-          showImport={!readOnly}
-          filterControls={externalFilterControls ? null : (
-            <MaintenanceFilters
-              filters={filters}
-              onChange={handleFilterChange}
-              onReset={handleResetFilters}
-              lokasiOptions={options.lokasi}
-              yearOptions={yearOptions}
-              activityOptions={options.jenisKegiatan}
-              showSearch
-            />
-          )}
-        />
-      )}
-
-      {!readOnly ? (
-        <MaintenanceFormDialog
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          initialValues={selectedRow}
-          lokasiOptions={options.lokasi}
-          onSubmit={handleSubmit}
-          loading={submitting}
-        />
-      ) : null}
-
-      {!readOnly ? (
-        <DeleteConfirmDialog
-          open={deleteOpen}
-          onOpenChange={setDeleteOpen}
-          item={selectedRow}
-          loading={deleteLoading}
-          onConfirm={handleDelete}
-        />
-      ) : null}
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        item={selectedRow}
+        loading={deleteLoading}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

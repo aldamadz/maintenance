@@ -89,7 +89,7 @@ export function MaintenanceFormDialog({
 
     await onSubmit({
       tanggal_maintenance: formValues.tanggal_maintenance,
-      kode_aset: formValues.kode_aset.trim(),
+      kode_aset: formValues.kode_aset.trim().toUpperCase(),
       nama_perangkat: formValues.nama_perangkat.trim(),
       tipe: formValues.tipe.trim() || null,
       lokasi: formValues.lokasi.trim() || null,

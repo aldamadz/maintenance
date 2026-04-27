@@ -7,7 +7,7 @@ Aplikasi web untuk pencatatan, pemantauan, dan analisis maintenance perangkat IT
 - Frontend: React + Vite
 - UI: Tailwind CSS + komponen custom bergaya shadcn
 - Client data: `@supabase/supabase-js`
-- Backend: Supabase
+- Backend: Supabase / PostgREST
 - Database: PostgreSQL
 - Auth: Supabase Auth
 - Realtime: Supabase Realtime
@@ -22,7 +22,7 @@ Aplikasi web untuk pencatatan, pemantauan, dan analisis maintenance perangkat IT
 - mode `Riwayat Maintenance`
 - filter data maintenance
 - export data maintenance
-- daftar aset publik dengan indikator prioritas maintenance
+- daftar aset publik dengan prioritas maintenance
 
 ### Halaman Internal
 
@@ -47,6 +47,7 @@ Aplikasi web untuk pencatatan, pemantauan, dan analisis maintenance perangkat IT
 ### Master Aset
 
 - CRUD aset
+- filter lokasi, status, interval, prioritas, dan pencarian
 - interval maintenance:
   - `6 bulan`
   - `1 tahun`
@@ -56,6 +57,8 @@ Aplikasi web untuk pencatatan, pemantauan, dan analisis maintenance perangkat IT
 - prioritas otomatis:
   - `Lewat`
   - `Mendekati`
+  - `Belum ada histori`
+  - `Normal`
 
 ### Dashboard
 
@@ -63,6 +66,7 @@ Aplikasi web untuk pencatatan, pemantauan, dan analisis maintenance perangkat IT
 - aset aktif
 - total maintenance
 - perlu maintenance
+- breakdown aset `Lewat`, `Mendekati`, dan `Belum ada histori`
 - kegiatan paling sering
 - chart maintenance per tahun
 - chart maintenance per jenis kegiatan
@@ -80,22 +84,22 @@ Aplikasi web untuk pencatatan, pemantauan, dan analisis maintenance perangkat IT
 
 ```text
 project-root/
-├── frontend/
-│   ├── Dockerfile
-│   ├── nginx.conf
-│   ├── package.json
-│   └── src/
-│       ├── App.jsx
-│       ├── components/
-│       ├── hooks/
-│       ├── lib/
-│       └── pages/
-├── supabase/
-│   ├── config/
-│   └── migrations/
-├── docker-compose.yml
-├── docker-compose.frontend.txt
-└── README.md
+|-- frontend/
+|   |-- Dockerfile
+|   |-- nginx.conf
+|   |-- package.json
+|   `-- src/
+|       |-- App.jsx
+|       |-- components/
+|       |-- hooks/
+|       |-- lib/
+|       `-- pages/
+|-- supabase/
+|   |-- config/
+|   `-- migrations/
+|-- docker-compose.example.yml
+|-- docker-compose.frontend.example.yml
+`-- README.md
 ```
 
 ## Schema Database
@@ -140,12 +144,14 @@ Migration yang tersedia:
 - `supabase/migrations/20260424_create_maintenance.sql`
 - `supabase/migrations/20260427_assets_schedule_patch.sql`
 - `supabase/migrations/20260427_asset_interval_patch.sql`
+- `supabase/migrations/20260427_asset_overview_rpc.sql`
 
 Catatan:
 
 - `20260424_create_maintenance.sql` adalah migration dasar
 - `20260427_assets_schedule_patch.sql` adalah patch incremental untuk instance yang sudah berjalan
 - `20260427_asset_interval_patch.sql` menambah `maintenance_interval_months`
+- `20260427_asset_overview_rpc.sql` menambah fungsi ringkasan, filter, dan pagination aset di sisi database
 
 ## Akses dan Auth
 
@@ -185,7 +191,7 @@ Pastikan tabel berikut masuk ke publication `supabase_realtime`:
 
 ### Opsi 1: Stack mandiri dari repo
 
-Digunakan jika ingin menjalankan PostgreSQL, PostgREST, dan frontend langsung dari repo ini.
+Digunakan jika ingin menjalankan PostgreSQL, PostgREST, gateway, dan frontend langsung dari repo ini.
 
 1. salin env:
 
@@ -204,14 +210,20 @@ node supabase/config/generate-jwt.mjs your_jwt_secret_here
 
 4. isi hasil `SUPABASE_ANON_KEY` dan `SUPABASE_SERVICE_ROLE_KEY` ke `.env`
 
-5. samakan env frontend:
+5. buat file compose lokal dari contoh:
+
+```bash
+cp docker-compose.example.yml docker-compose.yml
+```
+
+6. samakan env frontend:
 
 ```env
 VITE_SUPABASE_URL=http://localhost:8000
 VITE_SUPABASE_ANON_KEY=<ANON_KEY>
 ```
 
-6. jalankan:
+7. jalankan:
 
 ```bash
 docker compose up -d --build
@@ -221,6 +233,11 @@ Service utama:
 
 - frontend: `http://localhost:8088`
 - REST API: `http://localhost:8000/rest/v1`
+
+Catatan:
+
+- `docker-compose.yml` sengaja tidak di-commit
+- gunakan `docker-compose.example.yml` sebagai template awal
 
 ### Opsi 2: Menggunakan Supabase yang sudah ada
 
@@ -254,13 +271,14 @@ Jika Supabase official sudah berjalan di server, deploy frontend saja.
 
 File contoh compose frontend-only tersedia di:
 
-- `docker-compose.frontend.txt`
+- `docker-compose.frontend.example.yml`
 
 Contoh langkah:
 
 ```bash
 git clone <repo>
 cd maintenance
+cp docker-compose.frontend.example.yml docker-compose.frontend.yml
 docker compose -f docker-compose.frontend.yml up -d --build
 ```
 
@@ -274,6 +292,7 @@ Build args yang dibutuhkan:
 Jika ingin menjalankan seluruh stack dari repo ini:
 
 ```bash
+cp docker-compose.example.yml docker-compose.yml
 docker compose up -d --build
 ```
 
@@ -294,9 +313,10 @@ docker compose up -d --build
 
 ## Catatan Operasional
 
-- sorting prioritas aset dilakukan sebelum pagination
+- sorting prioritas aset dilakukan di sisi database sebelum pagination
 - aset `Lewat` naik ke atas
 - aset `Mendekati` berada di bawahnya
+- aset `Belum ada histori` ikut ditampilkan sebagai prioritas operasional
 - warna prioritas diterapkan ke seluruh baris pada daftar aset
 
 ## File Penting
@@ -320,5 +340,5 @@ docker compose up -d --build
 ## Catatan
 
 - maintenance berjalan berdasarkan interval aset
-- fitur jadwal manual tidak dipakai di UI
+- fitur jadwal manual tidak dipakai di UI maupun flow aplikasi
 - tabel dan patch jadwal lama masih bisa ada untuk kompatibilitas database lama

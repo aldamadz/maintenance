@@ -2,18 +2,67 @@ import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
 
 const maintenanceDb = supabase.schema(MAINTENANCE_SCHEMA);
 
+function normalizeAssetCode(value) {
+  return (value || "").trim().toUpperCase();
+}
+
+function pickPreferredText(nextValue, fallbackValue) {
+  if (typeof nextValue === "string" && nextValue.trim()) {
+    return nextValue.trim();
+  }
+
+  if (typeof fallbackValue === "string" && fallbackValue.trim()) {
+    return fallbackValue.trim();
+  }
+
+  return null;
+}
+
 function buildAssetPayload(record) {
   if (!record?.kode_aset || !record?.nama_perangkat) {
     return null;
   }
 
   return {
-    kode_aset: record.kode_aset.trim(),
+    kode_aset: normalizeAssetCode(record.kode_aset),
     nama_perangkat: record.nama_perangkat.trim(),
     tipe: record.tipe?.trim() || null,
     lokasi: record.lokasi?.trim() || null,
-    status: "aktif",
   };
+}
+
+function normalizeMaintenancePayload(payload) {
+  return {
+    ...payload,
+    kode_aset: normalizeAssetCode(payload.kode_aset),
+    nama_perangkat: payload.nama_perangkat?.trim() || "",
+    tipe: payload.tipe?.trim() || null,
+    lokasi: payload.lokasi?.trim() || null,
+    jenis_kegiatan: payload.jenis_kegiatan || null,
+    durasi: payload.durasi ?? null,
+    catatan: payload.catatan?.trim() || null,
+  };
+}
+
+function normalizeMaintenanceRows(rows) {
+  return rows.map((row) => normalizeMaintenancePayload(row));
+}
+
+async function fetchExistingAssetsByCodes(assetCodes) {
+  if (!assetCodes.length) {
+    return [];
+  }
+
+  const { data, error } = await maintenanceDb
+    .from("assets")
+    .select("kode_aset,nama_perangkat,tipe,lokasi,status,maintenance_interval_months")
+    .in("kode_aset", assetCodes);
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
 }
 
 async function syncAssetCatalog(records) {
@@ -21,7 +70,15 @@ async function syncAssetCatalog(records) {
     .map(buildAssetPayload)
     .filter(Boolean)
     .reduce((collection, item) => {
-      collection.set(item.kode_aset, item);
+      const current = collection.get(item.kode_aset);
+
+      collection.set(item.kode_aset, {
+        kode_aset: item.kode_aset,
+        nama_perangkat: pickPreferredText(item.nama_perangkat, current?.nama_perangkat),
+        tipe: pickPreferredText(item.tipe, current?.tipe),
+        lokasi: pickPreferredText(item.lokasi, current?.lokasi),
+      });
+
       return collection;
     }, new Map());
 
@@ -29,9 +86,28 @@ async function syncAssetCatalog(records) {
     return;
   }
 
+  const existingAssets = await fetchExistingAssetsByCodes([...payload.keys()]);
+  const existingLookup = existingAssets.reduce((lookup, item) => {
+    lookup.set(item.kode_aset, item);
+    return lookup;
+  }, new Map());
+
+  const mergedPayload = [...payload.values()].map((item) => {
+    const existing = existingLookup.get(item.kode_aset);
+
+    return {
+      kode_aset: item.kode_aset,
+      nama_perangkat: pickPreferredText(item.nama_perangkat, existing?.nama_perangkat),
+      tipe: pickPreferredText(item.tipe, existing?.tipe),
+      lokasi: pickPreferredText(item.lokasi, existing?.lokasi),
+      status: existing?.status || "aktif",
+      maintenance_interval_months: Number(existing?.maintenance_interval_months || 12),
+    };
+  });
+
   const { error } = await maintenanceDb
     .from("assets")
-    .upsert([...payload.values()], { onConflict: "kode_aset" });
+    .upsert(mergedPayload, { onConflict: "kode_aset" });
 
   if (error) {
     throw error;
@@ -163,16 +239,18 @@ export async function fetchMaintenanceForExport(filters) {
 }
 
 export async function createMaintenance(payload) {
-  await syncAssetCatalog([payload]);
-  const { error } = await maintenanceDb.from("maintenance").insert(payload);
+  const normalizedPayload = normalizeMaintenancePayload(payload);
+  await syncAssetCatalog([normalizedPayload]);
+  const { error } = await maintenanceDb.from("maintenance").insert(normalizedPayload);
   if (error) {
     throw error;
   }
 }
 
 export async function upsertMaintenanceRows(rows) {
-  await syncAssetCatalog(rows);
-  const { error } = await maintenanceDb.from("maintenance").upsert(rows, {
+  const normalizedRows = normalizeMaintenanceRows(rows);
+  await syncAssetCatalog(normalizedRows);
+  const { error } = await maintenanceDb.from("maintenance").upsert(normalizedRows, {
     onConflict: "tanggal_maintenance,kode_aset",
   });
 
@@ -182,10 +260,11 @@ export async function upsertMaintenanceRows(rows) {
 }
 
 export async function updateMaintenance(id, payload) {
-  await syncAssetCatalog([payload]);
+  const normalizedPayload = normalizeMaintenancePayload(payload);
+  await syncAssetCatalog([normalizedPayload]);
   const { error } = await maintenanceDb
     .from("maintenance")
-    .update(payload)
+    .update(normalizedPayload)
     .eq("id", id);
 
   if (error) {

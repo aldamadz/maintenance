@@ -1,0 +1,106 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: maintenance-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_this_postgres_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rest:
+    image: postgrest/postgrest:latest
+    container_name: maintenance-rest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change_this_postgres_password}@db:5432/${POSTGRES_DB:-postgres}
+      PGRST_DB_SCHEMAS: public,maintenance
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-change_this_jwt_secret_minimum_32_chars}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_OPENAPI_SERVER_PROXY_URI: ${SUPABASE_PUBLIC_URL:-http://localhost:8000}
+      PGRST_SERVER_PROXY_URI: ${SUPABASE_PUBLIC_URL:-http://localhost:8000}
+
+  gateway:
+    image: nginx:1.27-alpine
+    container_name: maintenance-gateway
+    restart: unless-stopped
+    depends_on:
+      rest:
+        condition: service_started
+    ports:
+      - ${GATEWAY_PORT:-8000}:8000
+    volumes:
+      - ./supabase/config/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_SUPABASE_URL: ${SUPABASE_URL:-http://localhost:8000}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-replace_with_hs256_anon_jwt}
+        VITE_STORAGE_BUCKET: maintenance-photos
+    container_name: maintenance-frontend
+    restart: unless-stopped
+    depends_on:
+      gateway:
+        condition: service_started
+    ports:
+      - ${FRONTEND_PORT:-8088}:80
+
+  meta:
+    image: supabase/postgres-meta:latest
+    container_name: maintenance-meta
+    restart: unless-stopped
+    profiles: ["studio"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: ${POSTGRES_DB:-postgres}
+      PG_META_DB_USER: ${POSTGRES_USER:-postgres}
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD:-change_this_postgres_password}
+
+  studio:
+    image: supabase/studio:latest
+    container_name: maintenance-studio
+    restart: unless-stopped
+    profiles: ["studio"]
+    depends_on:
+      meta:
+        condition: service_started
+    environment:
+      HOSTNAME: 0.0.0.0
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PORT: 5432
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_this_postgres_password}
+      DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION:-IT Maintenance}
+      DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT:-maintenance-app}
+      SUPABASE_URL: http://gateway:8000
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-http://localhost:8000}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-replace_with_hs256_anon_jwt}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-replace_with_hs256_service_role_jwt}
+      AUTH_JWT_SECRET: ${JWT_SECRET:-change_this_jwt_secret_minimum_32_chars}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-change_this_dashboard_password}
+    ports:
+      - 3000:3000
+
+volumes:
+  postgres_data:

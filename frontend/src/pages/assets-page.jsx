@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Boxes, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, Boxes, Clock3, ShieldCheck } from "lucide-react";
+import { AssetFilters } from "@/components/assets/asset-filters";
 import { AssetFormDialog } from "@/components/assets/asset-form-dialog";
 import { AssetTable } from "@/components/assets/asset-table";
 import { DeleteConfirmDialog } from "@/components/maintenance/delete-confirm-dialog";
 import { StatsCard } from "@/components/maintenance/stats-card";
-import { Input } from "@/components/ui/input";
 import { LoadingState } from "@/components/ui/loading-state";
-import { Select } from "@/components/ui/select";
+import { useRealtimeTick } from "@/hooks/use-realtime-tick";
 import { DEFAULT_ASSET_FILTERS } from "@/lib/constants";
 import {
   createAsset,
@@ -17,12 +17,15 @@ import {
   updateAsset,
 } from "@/lib/assets";
 import { isIgnorableSupabaseAbortError } from "@/lib/utils";
-import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
 import { toast } from "@/hooks/use-toast";
 
 export function AssetsPage() {
   const [assetFilters, setAssetFilters] = useState(DEFAULT_ASSET_FILTERS);
-  const [assetOptions, setAssetOptions] = useState({ lokasi: [], status: [], intervals: [] });
+  const [assetOptions, setAssetOptions] = useState({
+    lokasi: [],
+    status: [],
+    intervals: [],
+  });
   const [assetRows, setAssetRows] = useState([]);
   const [assetTotal, setAssetTotal] = useState(0);
   const [assetPage, setAssetPage] = useState(1);
@@ -33,64 +36,7 @@ export function AssetsPage() {
   const [assetSubmitting, setAssetSubmitting] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [deleteState, setDeleteState] = useState({ open: false, item: null });
-  const [realtimeTick, setRealtimeTick] = useState(0);
-  const realtimeTimerRef = useRef(null);
-
-  const assetFilterControls = useMemo(
-    () => (
-      <div className="flex flex-wrap gap-3">
-        <Input
-          className="w-full min-w-56 sm:w-56"
-          placeholder="Cari aset"
-          value={assetFilters.search}
-          onChange={(event) => {
-            setAssetPage(1);
-            setAssetFilters((current) => ({
-              ...current,
-              search: event.target.value,
-            }));
-          }}
-        />
-        <Select
-          className="w-full min-w-44 sm:w-44"
-          value={assetFilters.lokasi}
-          onChange={(event) => {
-            setAssetPage(1);
-            setAssetFilters((current) => ({
-              ...current,
-              lokasi: event.target.value,
-            }));
-          }}
-        >
-          <option value="">Semua lokasi</option>
-          {assetOptions.lokasi.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </Select>
-        <Select
-          className="w-full min-w-40 sm:w-40"
-          value={assetFilters.status}
-          onChange={(event) => {
-            setAssetPage(1);
-            setAssetFilters((current) => ({
-              ...current,
-              status: event.target.value,
-            }));
-          }}
-        >
-          <option value="">Semua status</option>
-          {assetOptions.status.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </Select>
-      </div>
-    ),
-    [assetFilters, assetOptions],
-  );
+  const realtimeTick = useRealtimeTick("assets-admin-live", ["assets", "maintenance"]);
 
   useEffect(() => {
     async function loadAssetOptionsAndSummary() {
@@ -146,37 +92,6 @@ export function AssetsPage() {
     loadAssets();
   }, [assetFilters, assetPage, assetPageSize, realtimeTick]);
 
-  useEffect(() => {
-    const channel = supabase
-      .channel(`assets-admin-live-${Math.random().toString(36).slice(2)}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: MAINTENANCE_SCHEMA, table: "assets" },
-        () => {
-          window.clearTimeout(realtimeTimerRef.current);
-          realtimeTimerRef.current = window.setTimeout(() => {
-            setRealtimeTick((current) => current + 1);
-          }, 250);
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: MAINTENANCE_SCHEMA, table: "maintenance" },
-        () => {
-          window.clearTimeout(realtimeTimerRef.current);
-          realtimeTimerRef.current = window.setTimeout(() => {
-            setRealtimeTick((current) => current + 1);
-          }, 250);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      window.clearTimeout(realtimeTimerRef.current);
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
   async function handleAssetSubmit(payload) {
     try {
       setAssetSubmitting(true);
@@ -196,7 +111,6 @@ export function AssetsPage() {
 
       setAssetDialogOpen(false);
       setSelectedAsset(null);
-      setRealtimeTick((current) => current + 1);
     } catch (error) {
       toast({
         title: "Gagal menyimpan aset",
@@ -221,7 +135,6 @@ export function AssetsPage() {
       });
 
       setDeleteState({ open: false, item: null });
-      setRealtimeTick((current) => current + 1);
     } catch (error) {
       toast({
         title: "Gagal menghapus data",
@@ -231,12 +144,21 @@ export function AssetsPage() {
     }
   }
 
+  function handleAssetFilterChange(field, value) {
+    setAssetPage(1);
+    setAssetFilters((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         <StatsCard
           label="Total aset"
           value={summary?.total_assets || 0}
+          hint={`${summary?.missing_history_assets || 0} tanpa histori`}
           icon={Boxes}
           tone="secondary"
         />
@@ -246,10 +168,17 @@ export function AssetsPage() {
           icon={ShieldCheck}
         />
         <StatsCard
-          label="Perlu maintenance"
-          value={summary?.due_assets || 0}
+          label="Lewat maintenance"
+          value={summary?.overdue_assets || 0}
+          hint={`${summary?.due_assets || 0} butuh tindakan`}
           icon={AlertTriangle}
           tone="accent"
+        />
+        <StatsCard
+          label="Mendekati"
+          value={summary?.upcoming_assets || 0}
+          hint="<= 3 bulan"
+          icon={Clock3}
         />
       </div>
 
@@ -267,7 +196,19 @@ export function AssetsPage() {
             setAssetPageSize(value);
             setAssetPage(1);
           }}
-          filterControls={assetFilterControls}
+          filterControls={(
+            <AssetFilters
+              filters={assetFilters}
+              onChange={handleAssetFilterChange}
+              onReset={() => {
+                setAssetPage(1);
+                setAssetFilters(DEFAULT_ASSET_FILTERS);
+              }}
+              lokasiOptions={assetOptions.lokasi}
+              statusOptions={assetOptions.status}
+              intervalOptions={assetOptions.intervals}
+            />
+          )}
           canManage
           showCreate
           showActions
