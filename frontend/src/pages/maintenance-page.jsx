@@ -1,9 +1,13 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { format } from "date-fns";
 import { useAuth } from "@/components/auth/auth-provider";
 import { DeleteConfirmDialog } from "@/components/maintenance/delete-confirm-dialog";
+import { MaintenanceDetailDialog } from "@/components/maintenance/maintenance-detail-dialog";
 import { MaintenanceFilters } from "@/components/maintenance/maintenance-filters";
 import { MaintenanceFormDialog } from "@/components/maintenance/maintenance-form-dialog";
 import { MaintenanceTable } from "@/components/maintenance/maintenance-table";
+import { QuickCompleteDialog } from "@/components/maintenance/quick-complete-dialog";
+import { Button } from "@/components/ui/button";
 import { useRealtimeTick } from "@/hooks/use-realtime-tick";
 import { toast } from "@/hooks/use-toast";
 import { DEFAULT_FILTERS } from "@/lib/constants";
@@ -20,6 +24,7 @@ import {
 } from "@/lib/maintenance";
 import { parseMaintenanceWorkbook } from "@/lib/maintenance-import";
 import { isIgnorableSupabaseAbortError } from "@/lib/utils";
+import { completeWorkItem } from "@/lib/work";
 
 export function MaintenancePage() {
   const { isAuthenticated } = useAuth();
@@ -39,6 +44,9 @@ export function MaintenancePage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+  const [detailRow, setDetailRow] = useState(null);
+  const [quickCompleteRow, setQuickCompleteRow] = useState(null);
+  const [quickCompleteLoading, setQuickCompleteLoading] = useState(false);
   const deferredSearch = useDeferredValue(filters.search);
   const realtimeTick = useRealtimeTick("maintenance-live-page", ["maintenance"]);
 
@@ -160,6 +168,15 @@ export function MaintenancePage() {
     setFilters(DEFAULT_FILTERS);
   }
 
+  function applyQuickFilter(nextFilters) {
+    setPage(1);
+    setFilters((current) => ({
+      ...current,
+      ...nextFilters,
+      tahun: nextFilters.tanggalMulai || nextFilters.tanggalSelesai ? "" : current.tahun,
+    }));
+  }
+
   function handleSort(column) {
     if (sortColumn === column) {
       setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
@@ -201,6 +218,7 @@ export function MaintenancePage() {
 
       setDialogOpen(false);
       setSelectedRow(null);
+      setDetailRow(null);
       await refreshTable();
     } catch (error) {
       toast({
@@ -227,6 +245,7 @@ export function MaintenancePage() {
       });
       setDeleteOpen(false);
       setSelectedRow(null);
+      setDetailRow(null);
       await refreshTable();
     } catch (error) {
       toast({
@@ -236,6 +255,32 @@ export function MaintenancePage() {
       });
     } finally {
       setDeleteLoading(false);
+    }
+  }
+
+  async function handleQuickComplete(payload) {
+    if (!quickCompleteRow?.id) {
+      return;
+    }
+
+    try {
+      setQuickCompleteLoading(true);
+      await completeWorkItem(quickCompleteRow.id, payload);
+      toast({
+        title: "Pekerjaan selesai",
+        description: "Catatan disimpan dan status diubah menjadi selesai.",
+      });
+      setQuickCompleteRow(null);
+      setDetailRow(null);
+      await refreshTable();
+    } catch (error) {
+      toast({
+        title: "Gagal menyelesaikan pekerjaan",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setQuickCompleteLoading(false);
     }
   }
 
@@ -260,12 +305,13 @@ export function MaintenancePage() {
     try {
       setImportLoading(true);
       const parsed = await parseMaintenanceWorkbook(file);
+      const assetRowCount = parsed.assetRows?.length || 0;
 
-      if (!parsed.rows.length) {
+      if (!parsed.rows.length && !assetRowCount) {
         throw new Error("Tidak ada baris valid yang bisa diimport.");
       }
 
-      await upsertMaintenanceRows(parsed.rows);
+      await upsertMaintenanceRows(parsed.rows, parsed.assetRows);
 
       const filterOptions = await fetchFilterOptions();
       setOptions(filterOptions);
@@ -275,8 +321,8 @@ export function MaintenancePage() {
         title: "Import selesai",
         description:
           parsed.errors.length > 0
-            ? `${parsed.rows.length} baris berhasil diproses (${parsed.planningRows} planning), ${parsed.errors.length} baris dilewati.`
-            : `${parsed.rows.length} baris berhasil diinsert/update (${parsed.planningRows} planning).`,
+            ? `${parsed.rows.length} maintenance dan ${assetRowCount} aset diproses (${parsed.planningRows} planning), ${parsed.errors.length} baris dilewati.`
+            : `${parsed.rows.length} maintenance dan ${assetRowCount} aset berhasil diinsert/update (${parsed.planningRows} terjadwal).`,
       });
 
       if (parsed.errors.length) {
@@ -299,6 +345,45 @@ export function MaintenancePage() {
 
   return (
     <div className="space-y-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden lg:space-y-4">
+      <div className="flex flex-wrap gap-2 rounded-3xl border border-border/70 bg-card p-4">
+        <Button
+          variant="outline"
+          onClick={() => applyQuickFilter({ status: "planning" })}
+        >
+          Terjadwal
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => applyQuickFilter({ status: "selesai" })}
+        >
+          Selesai
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            const today = format(new Date(), "yyyy-MM-dd");
+            applyQuickFilter({ tanggalMulai: today, tanggalSelesai: today });
+          }}
+        >
+          Hari ini
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => applyQuickFilter({ officeType: "kc" })}
+        >
+          Kantor Cabang
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => applyQuickFilter({ officeType: "kcp" })}
+        >
+          KCP
+        </Button>
+        <Button variant="ghost" onClick={handleResetFilters}>
+          Reset
+        </Button>
+      </div>
+
       <MaintenanceTable
         data={rows}
         total={total}
@@ -317,14 +402,7 @@ export function MaintenancePage() {
           setSelectedRow(null);
           setDialogOpen(true);
         }}
-        onEdit={(row) => {
-          setSelectedRow(row);
-          setDialogOpen(true);
-        }}
-        onDelete={(row) => {
-          setSelectedRow(row);
-          setDeleteOpen(true);
-        }}
+        onRowClick={(row) => setDetailRow(row)}
         onExport={handleExport}
         onImport={handleImport}
         canManage={isAuthenticated}
@@ -366,6 +444,30 @@ export function MaintenancePage() {
         item={selectedRow}
         loading={deleteLoading}
         onConfirm={handleDelete}
+      />
+
+      <MaintenanceDetailDialog
+        open={Boolean(detailRow)}
+        onOpenChange={(open) => !open && setDetailRow(null)}
+        item={detailRow}
+        canManage={isAuthenticated}
+        onEdit={(row) => {
+          setSelectedRow(row);
+          setDialogOpen(true);
+        }}
+        onDelete={(row) => {
+          setSelectedRow(row);
+          setDeleteOpen(true);
+        }}
+        onComplete={(row) => setQuickCompleteRow(row)}
+      />
+
+      <QuickCompleteDialog
+        item={quickCompleteRow}
+        open={Boolean(quickCompleteRow)}
+        onOpenChange={(open) => !open && setQuickCompleteRow(null)}
+        onSubmit={handleQuickComplete}
+        loading={quickCompleteLoading}
       />
     </div>
   );

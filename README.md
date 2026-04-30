@@ -18,16 +18,16 @@ Aplikasi web untuk pencatatan, pemantauan, dan analisis maintenance perangkat IT
 ### Halaman Publik
 
 - halaman `/` tanpa login
-- mode `Daftar Aset`
-- mode `Riwayat Maintenance`
-- filter data maintenance
-- export data maintenance
-- daftar aset publik dengan prioritas maintenance
+- monitoring manager untuk perkembangan maintenance dan urutan kunjungan
+- filter tanggal, status, jenis kantor, dan lokasi
+- saat item `Urutan Kunjungan` dipilih, user diarahkan ke halaman detail publik berbentuk tabel berisi ringkasan, aset yang maintenance, catatan, dan durasi
+- data `Terjadwal` tetap terlihat untuk pemantauan publik
 
 ### Halaman Internal
 
 - login di `/login`
 - dashboard ringkasan maintenance
+- halaman `Kerja Hari Ini` untuk teknisi di lokasi
 - CRUD data maintenance
 - master aset berbasis interval maintenance
 
@@ -41,14 +41,24 @@ Aplikasi web untuk pencatatan, pemantauan, dan analisis maintenance perangkat IT
 - filter tahun
 - filter range tanggal
 - filter jenis kegiatan
-- status `Selesai` dan `Planning`
+- filter status dan jenis kantor
+- status `Selesai` dan `Terjadwal` (`planning` di database)
+- quick filter untuk `Terjadwal`, `Selesai`, `Hari ini`, `Kantor Cabang`, dan `KCP`
+- aksi cepat `Isi Catatan & Selesaikan` untuk baris terjadwal
+- tabel internal memakai tampilan row-card dengan header sticky, scrollbar, dan pagination ringkas
 - export Excel
 - import Excel dengan mekanisme `upsert`
 
 ### Master Aset
 
 - CRUD aset
+- import Excel master aset dari halaman `/assets`
+- buat jadwal maintenance massal per kantor, semua KC, atau semua KCP
 - filter lokasi, status, interval, prioritas, dan pencarian
+- quick filter prioritas aset
+- halaman detail aset dengan ringkasan, pekerjaan menunggu, dan riwayat maintenance
+- badge aset yang sudah punya pekerjaan `Terjadwal`
+- tombol `Buat Jadwal` di `/assets` membuat data maintenance berstatus `Terjadwal` untuk aset aktif berdasarkan kantor, KC, atau KCP
 - interval maintenance:
   - `6 bulan`
   - `1 tahun`
@@ -66,20 +76,24 @@ Aplikasi web untuk pencatatan, pemantauan, dan analisis maintenance perangkat IT
 - total aset
 - aset aktif
 - total maintenance
+- fokus pekerjaan hari ini dan CTA ke `Kerja Hari Ini`
+- progress bulan berjalan selesai vs terjadwal
+- breakdown progress Kantor Cabang, Kantor Cabang Pembantu, dan Lainnya
 - perlu maintenance
-- breakdown aset `Lewat`, `Mendekati`, dan `Belum ada histori`
 - kegiatan paling sering
 - chart maintenance per tahun
 - chart maintenance per jenis kegiatan
-- panel prioritas maintenance
 
 ## Routing
 
 - `/` -> halaman publik
+- `/monitoring/kunjungan` -> detail monitoring publik berbentuk tabel untuk satu tanggal dan lokasi kunjungan
 - `/login` -> login
 - `/dashboard` -> dashboard internal
+- `/work` -> kerja hari ini untuk teknisi login
 - `/maintenance` -> data maintenance
 - `/assets` -> master aset
+- `/assets/:assetId` -> detail aset
 
 ## Struktur Project
 
@@ -125,6 +139,7 @@ create table maintenance.maintenance (
   jenis_kegiatan text,
   durasi integer,
   status text not null default 'selesai',
+  urutan_kunjungan integer,
   catatan text,
   created_at timestamp default now()
 );
@@ -143,19 +158,14 @@ create table maintenance.assets (
 
 Migration yang tersedia:
 
-- `supabase/migrations/20260424_create_maintenance.sql`
-- `supabase/migrations/20260427_assets_schedule_patch.sql`
-- `supabase/migrations/20260427_asset_interval_patch.sql`
-- `supabase/migrations/20260427_asset_overview_rpc.sql`
-- `supabase/migrations/20260427_maintenance_planning_status.sql`
+- `supabase/migrations/20260430_final_maintenance_schema.sql`
 
 Catatan:
 
-- `20260424_create_maintenance.sql` adalah migration dasar
-- `20260427_assets_schedule_patch.sql` adalah patch incremental untuk instance yang sudah berjalan
-- `20260427_asset_interval_patch.sql` menambah `maintenance_interval_months`
-- `20260427_asset_overview_rpc.sql` menambah fungsi ringkasan, filter, dan pagination aset di sisi database
-- `20260427_maintenance_planning_status.sql` menambah status `selesai/planning` untuk data maintenance
+- migration final membuat schema `maintenance` dari awal
+- migration final hanya membuat tabel `maintenance.maintenance` dan `maintenance.assets`
+- tabel jadwal manual tidak dibuat lagi
+- jika ingin reset total, jalankan `drop schema if exists maintenance cascade;` lalu jalankan migration final
 
 ## Akses dan Auth
 
@@ -163,6 +173,7 @@ Perilaku akses saat ini:
 
 - data publik tetap bisa dibaca untuk halaman `/`
 - operasi CRUD membutuhkan user login Supabase Auth
+- tabel utama dipakai untuk membaca data; aksi edit/hapus/selesai ditempatkan di detail atau halaman kerja
 
 Secara praktis:
 
@@ -184,7 +195,6 @@ Bagian yang ikut diperbarui otomatis:
 - riwayat maintenance
 - dashboard
 - daftar aset
-- prioritas maintenance
 
 Pastikan tabel berikut masuk ke publication `supabase_realtime`:
 
@@ -311,16 +321,38 @@ docker compose up -d --build
 
 - hanya untuk user login
 - file Excel/CSV diproses dengan `upsert`
+- import membaca semua sheet dalam workbook
+- baris dengan `Tanggal_maintenance` diproses sebagai data maintenance
+- baris tanpa `Tanggal_maintenance` diproses sebagai master aset saja, bukan pekerjaan maintenance
+- dari halaman `/assets`, import Excel hanya memasukkan master aset dan tidak membuat data maintenance
 - jika `kode_aset` kosong atau `tidak diketahui`, sistem membuat kode otomatis berbasis nama perangkat/lokasi
+- jika `catatan` berisi pola `Kode aset ...`, kode tersebut dipakai untuk menghindari data tergabung karena kolom `kode_aset` duplikat
+- jika kode aset diambil dari `catatan` dan berbeda dari kolom Excel, sistem menambahkan marker `[Info import]` pada `catatan` berisi kode yang dipakai dan kode aset kolom Excel sebelumnya
 - jika `catatan` kosong, `-`, `–`, atau `—`, baris otomatis masuk sebagai `planning`
+- di UI, status `planning` ditampilkan sebagai `Terjadwal`
+- baris `Terjadwal` wajib memiliki `lokasi`; jika kosong, baris dilewati dengan pesan error
+- jika baris `Terjadwal` tidak punya `jenis_kegiatan`, sistem mengisi `Estimasi maintenance`
+- jika `lokasi` kosong, import memakai lokasi terakhir pada tanggal yang sama
+- pada tanggal yang sama, urutan lokasi mengikuti urutan pertama kali lokasi muncul di sheet Excel dan disimpan sebagai `urutan_kunjungan`
+- aset di dalam lokasi yang sama tidak dipaksa urutannya
 - jika file memiliki kolom `status`, nilai `planning`, `rencana`, `terjadwal`, atau `planned` akan disimpan sebagai status `planning`
+- import ulang tidak menurunkan row yang sudah `Selesai` menjadi `Terjadwal` dan tidak menghapus catatan/durasi yang sudah diisi dari aplikasi
+- penjadwalan dari halaman `/assets` memakai row `maintenance` berstatus `planning`; jika row pada tanggal/kegiatan/aset yang sama sudah `Selesai`, row tersebut dilewati
 - kunci `upsert`:
   - `tanggal_maintenance`
   - `kode_aset`
+  - `jenis_kegiatan`
+- durasi negatif ditolak
 
 ## Catatan Operasional
 
 - sorting prioritas aset dilakukan di sisi database sebelum pagination
+- `KC ...` dihitung sebagai Kantor Cabang
+- `KCP ...` dihitung sebagai Kantor Cabang Pembantu
+- selain prefix tersebut dihitung sebagai Lainnya
+- lokasi ber-prefix `KC` dan `KCP` dinormalisasi saat input/import, misalnya `KCP Pati` disimpan sebagai `KCP PATI`
+- halaman publik `/` boleh menampilkan data Terjadwal dan catatan hasil maintenance untuk monitoring manager
+- pilihan lokasi pada `Urutan Kunjungan` di halaman publik membuka route detail tabel berisi ringkasan aset maintenance, catatan, dan durasi
 - aset `Lewat` naik ke atas
 - aset `Mendekati` berada di bawahnya
 - aset `Belum ada histori` ikut ditampilkan sebagai prioritas operasional

@@ -4,9 +4,7 @@ import {
   ArrowUp,
   ArrowUpDown,
   FileSpreadsheet,
-  Pencil,
   Plus,
-  Trash2,
   Upload,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -22,8 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PAGE_SIZE_OPTIONS } from "@/lib/constants";
-import { formatDate, formatMinutes } from "@/lib/utils";
+import { TablePagination } from "@/components/ui/table-pagination";
+import { cn, formatDate, formatMinutes } from "@/lib/utils";
 
 function SortIcon({ active, direction }) {
   if (!active) {
@@ -50,18 +48,22 @@ function getMaintenanceStatusTone(status) {
 }
 
 function formatMaintenanceStatus(status) {
-  return status === "planning" ? "Planning" : "Selesai";
+  return status === "planning" ? "Terjadwal" : "Selesai";
 }
 
 function MaintenanceCard({
   item,
-  canManage,
-  showManageActions,
-  onEdit,
-  onDelete,
+  onRowClick,
 }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-card p-4">
+    <button
+      type="button"
+      className={cn(
+        "w-full rounded-2xl border border-border/70 bg-card p-4 text-left transition",
+        onRowClick && "hover:border-primary/40 hover:bg-muted/35",
+      )}
+      onClick={() => onRowClick?.(item)}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-semibold">{item.nama_perangkat}</p>
@@ -81,7 +83,9 @@ function MaintenanceCard({
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-foreground">Lokasi</span>
-          <span className="text-right font-medium">{item.lokasi || "-"}</span>
+          <span className="text-right font-medium">
+            {item.urutan_kunjungan ? `${item.urutan_kunjungan}. ` : ""}{item.lokasi || "-"}
+          </span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-foreground">Kegiatan</span>
@@ -99,27 +103,8 @@ function MaintenanceCard({
         </div>
       </div>
 
-      {showManageActions ? (
-        <div className="mt-4 flex justify-end gap-2">
-          <Button
-            size="icon"
-            variant="outline"
-            disabled={!canManage}
-            onClick={() => onEdit(item)}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            size="icon"
-            variant="destructive"
-            disabled={!canManage}
-            onClick={() => onDelete(item)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ) : null}
-    </div>
+      {onRowClick ? <p className="mt-4 text-xs font-semibold text-primary">Buka rincian</p> : null}
+    </button>
   );
 }
 
@@ -135,8 +120,7 @@ export function MaintenanceTable({
   onPageChange,
   onPageSizeChange,
   onCreate,
-  onEdit,
-  onDelete,
+  onRowClick,
   onExport,
   onImport,
   canManage = false,
@@ -148,7 +132,6 @@ export function MaintenanceTable({
   filterControls = null,
 }) {
   const fileInputRef = useRef(null);
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <Card className="min-w-0 overflow-hidden border-border/70 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
@@ -217,10 +200,7 @@ export function MaintenanceTable({
                 <MaintenanceCard
                   key={item.id}
                   item={item}
-                  canManage={canManage}
-                  showManageActions={showManageActions}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
+                  onRowClick={onRowClick}
                 />
               ))}
             </div>
@@ -237,11 +217,12 @@ export function MaintenanceTable({
                       ["kode_aset", "Kode Aset"],
                       ["nama_perangkat", "Perangkat"],
                       ["lokasi", "Lokasi"],
+                      ["urutan_kunjungan", "Urutan"],
                       ["jenis_kegiatan", "Kegiatan"],
                       ["status", "Status"],
                       ["durasi", "Durasi"],
                     ].map(([column, label]) => (
-                      <TableHead key={column} className="sticky top-0 z-10 bg-card">
+                      <TableHead key={column} className="sticky top-0 z-10">
                         <button
                           type="button"
                           className="inline-flex items-center gap-2"
@@ -255,17 +236,16 @@ export function MaintenanceTable({
                         </button>
                       </TableHead>
                     ))}
-                    <TableHead className="sticky top-0 z-10 bg-card">Catatan</TableHead>
-                    {showManageActions ? (
-                      <TableHead className="sticky top-0 z-10 bg-card text-right">
-                        Aksi
-                      </TableHead>
-                    ) : null}
+                    <TableHead className="sticky top-0 z-10">Catatan</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.map((item) => (
-                    <TableRow key={item.id}>
+                    <TableRow
+                      key={item.id}
+                      className={cn(onRowClick && "cursor-pointer")}
+                      onClick={() => onRowClick?.(item)}
+                    >
                       <TableCell className="min-w-32 font-medium">
                         {formatDate(item.tanggal_maintenance)}
                       </TableCell>
@@ -279,6 +259,7 @@ export function MaintenanceTable({
                         </div>
                       </TableCell>
                       <TableCell>{item.lokasi || "-"}</TableCell>
+                      <TableCell>{item.urutan_kunjungan || "-"}</TableCell>
                       <TableCell>
                         {item.jenis_kegiatan ? (
                           <Badge>{item.jenis_kegiatan}</Badge>
@@ -301,76 +282,20 @@ export function MaintenanceTable({
                           {item.catatan || "-"}
                         </p>
                       </TableCell>
-                      {showManageActions ? (
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              disabled={!canManage}
-                              onClick={() => onEdit(item)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="destructive"
-                              disabled={!canManage}
-                              onClick={() => onDelete(item)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      ) : null}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
 
-            <div className="flex shrink-0 flex-col gap-4 px-4 py-4 sm:px-6">
-              <div className="text-sm text-muted-foreground">
-                Menampilkan {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, total)} dari {total} data
-              </div>
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-muted-foreground">Rows</label>
-                  <select
-                    className="h-10 min-w-20 rounded-xl border border-input bg-background px-3 text-sm"
-                    value={pageSize}
-                    onChange={(event) => onPageSizeChange(Number(event.target.value))}
-                  >
-                    {PAGE_SIZE_OPTIONS.map((size) => (
-                      <option key={size} value={size}>
-                        {size}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:flex-wrap sm:justify-end sm:gap-3">
-                  <Button
-                    variant="outline"
-                    className="w-full sm:w-auto"
-                    disabled={page <= 1}
-                    onClick={() => onPageChange(page - 1)}
-                  >
-                    Sebelumnya
-                  </Button>
-                  <div className="text-center text-sm font-semibold sm:min-w-28">
-                    Halaman {page} / {totalPages}
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="w-full sm:w-auto"
-                    disabled={page >= totalPages}
-                    onClick={() => onPageChange(page + 1)}
-                  >
-                    Berikutnya
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <TablePagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              itemLabel="data"
+              onPageChange={onPageChange}
+              onPageSizeChange={onPageSizeChange}
+            />
           </>
         ) : (
           <div className="p-6">

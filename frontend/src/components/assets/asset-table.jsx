@@ -1,5 +1,6 @@
+import { useRef } from "react";
 import { addMonths, parseISO, startOfDay } from "date-fns";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { CalendarPlus, Plus, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PAGE_SIZE_OPTIONS } from "@/lib/constants";
+import { TablePagination } from "@/components/ui/table-pagination";
 import { cn, formatDate } from "@/lib/utils";
 
 function getStatusTone(status) {
@@ -105,11 +106,18 @@ function getNextMaintenanceState(asset) {
   return null;
 }
 
-function AssetCard({ asset, canManage, showActions, onEdit, onDelete }) {
+function AssetCard({ asset, onRowClick }) {
   const nextMaintenanceState = getNextMaintenanceState(asset);
 
   return (
-    <div className={cn("rounded-2xl border border-border/70 bg-card p-4", nextMaintenanceState?.rowTone)}>
+    <button
+      type="button"
+      className={cn(
+        "w-full rounded-2xl border border-border/70 bg-card p-4 text-left transition hover:border-primary/40 hover:bg-muted/35",
+        nextMaintenanceState?.rowTone,
+      )}
+      onClick={() => onRowClick?.(asset)}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-semibold">{asset.nama_perangkat}</p>
@@ -135,6 +143,25 @@ function AssetCard({ asset, canManage, showActions, onEdit, onDelete }) {
             {formatDate(asset.last_maintenance_date)}
           </span>
         </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">Histori</span>
+          <span className="text-right font-medium">{asset.maintenance_count || 0} kali</span>
+        </div>
+        <div className="flex items-start justify-between gap-3">
+          <span className="text-muted-foreground">Terjadwal</span>
+          <div className="text-right">
+            {asset.scheduled_date ? (
+              <>
+                <p className="font-medium">{formatDate(asset.scheduled_date)}</p>
+                <Badge className="mt-1 border border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300">
+                  Terjadwal
+                </Badge>
+              </>
+            ) : (
+              <span className="font-medium">-</span>
+            )}
+          </div>
+        </div>
         <div className="flex items-start justify-between gap-3">
           <span className="text-muted-foreground">Berikutnya</span>
           <div className="flex flex-col items-end gap-1 text-right">
@@ -150,29 +177,8 @@ function AssetCard({ asset, canManage, showActions, onEdit, onDelete }) {
         </div>
       </div>
 
-      {showActions ? (
-        <div className="mt-4 flex justify-end gap-2">
-          <Button
-            size="icon"
-            variant="outline"
-            disabled={!canManage}
-            onClick={() => onEdit?.(asset)}
-            title="Edit aset"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            size="icon"
-            variant="destructive"
-            disabled={!canManage}
-            onClick={() => onDelete?.(asset)}
-            title="Hapus aset"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ) : null}
-    </div>
+      <p className="mt-4 text-xs font-semibold text-primary">Buka detail aset</p>
+    </button>
   );
 }
 
@@ -185,14 +191,16 @@ export function AssetTable({
   onPageChange,
   onPageSizeChange,
   filterControls = null,
-  canManage = false,
   onCreate,
-  onEdit,
-  onDelete,
+  onImport,
+  onSchedule,
+  onRowClick,
   showCreate = false,
-  showActions = false,
+  showImport = false,
+  showSchedule = false,
+  importLoading = false,
 }) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const fileInputRef = useRef(null);
 
   return (
     <Card className="min-w-0 overflow-hidden border-border/70 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
@@ -202,6 +210,37 @@ export function AssetTable({
         </div>
         <div className="flex flex-wrap gap-3">
           {filterControls}
+          {showImport ? (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file && onImport) {
+                    onImport(file);
+                  }
+                  event.target.value = "";
+                }}
+              />
+              <Button
+                variant="outline"
+                disabled={importLoading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4" />
+                {importLoading ? "Import..." : "Import Aset"}
+              </Button>
+            </>
+          ) : null}
+          {showSchedule ? (
+            <Button variant="outline" onClick={onSchedule}>
+              <CalendarPlus className="h-4 w-4" />
+              Buat Jadwal
+            </Button>
+          ) : null}
           {showCreate ? (
             <Button onClick={onCreate}>
               <Plus className="h-4 w-4" />
@@ -219,10 +258,7 @@ export function AssetTable({
                 <AssetCard
                   key={asset.id}
                   asset={asset}
-                  canManage={canManage}
-                  showActions={showActions}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
+                  onRowClick={onRowClick}
                 />
               ))}
             </div>
@@ -234,20 +270,17 @@ export function AssetTable({
               >
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="sticky top-0 z-10 bg-card">Kode Aset</TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-card">Perangkat</TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-card">Lokasi</TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-card">Status</TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-card">Interval</TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-card">
+                    <TableHead className="sticky top-0 z-10">Kode Aset</TableHead>
+                    <TableHead className="sticky top-0 z-10">Perangkat</TableHead>
+                    <TableHead className="sticky top-0 z-10">Lokasi</TableHead>
+                    <TableHead className="sticky top-0 z-10">Status</TableHead>
+                    <TableHead className="sticky top-0 z-10">Interval</TableHead>
+                    <TableHead className="sticky top-0 z-10">
                       Maintenance Terakhir
                     </TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-card">Berikutnya</TableHead>
-                    {showActions ? (
-                      <TableHead className="sticky top-0 z-10 bg-card text-right">
-                        Aksi
-                      </TableHead>
-                    ) : null}
+                    <TableHead className="sticky top-0 z-10">Histori</TableHead>
+                    <TableHead className="sticky top-0 z-10">Terjadwal</TableHead>
+                    <TableHead className="sticky top-0 z-10">Berikutnya</TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -257,7 +290,11 @@ export function AssetTable({
                     const cellTone = nextMaintenanceState?.cellTone;
 
                     return (
-                      <TableRow key={asset.id} className={cn(nextMaintenanceState?.rowTone)}>
+                      <TableRow
+                        key={asset.id}
+                        className={cn("cursor-pointer", nextMaintenanceState?.rowTone)}
+                        onClick={() => onRowClick?.(asset)}
+                      >
                         <TableCell className={cn("font-semibold", cellTone)}>
                           {asset.kode_aset}
                         </TableCell>
@@ -279,6 +316,17 @@ export function AssetTable({
                         <TableCell className={cellTone}>
                           {formatDate(asset.last_maintenance_date)}
                         </TableCell>
+                        <TableCell className={cellTone}>{asset.maintenance_count || 0} kali</TableCell>
+                        <TableCell className={cellTone}>
+                          {asset.scheduled_date ? (
+                            <div className="flex flex-col gap-1">
+                              <span>{formatDate(asset.scheduled_date)}</span>
+                              <Badge className="w-fit border border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300">
+                                Terjadwal
+                              </Badge>
+                            </div>
+                          ) : "-"}
+                        </TableCell>
                         <TableCell className={cellTone}>
                           <div className="flex flex-col gap-1">
                             <span className={nextMaintenanceState?.textTone || "text-foreground"}>
@@ -291,30 +339,6 @@ export function AssetTable({
                             ) : null}
                           </div>
                         </TableCell>
-                        {showActions ? (
-                          <TableCell className={cn("text-right", cellTone)}>
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                disabled={!canManage}
-                                onClick={() => onEdit?.(asset)}
-                                title="Edit aset"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="destructive"
-                                disabled={!canManage}
-                                onClick={() => onDelete?.(asset)}
-                                title="Hapus aset"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        ) : null}
                       </TableRow>
                     );
                   })}
@@ -322,48 +346,14 @@ export function AssetTable({
               </Table>
             </div>
 
-            <div className="flex shrink-0 flex-col gap-4 px-4 py-4 sm:px-6">
-              <div className="text-sm text-muted-foreground">
-                Menampilkan {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, total)} dari {total} aset
-              </div>
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-muted-foreground">Rows</label>
-                  <select
-                    className="h-10 min-w-20 rounded-xl border border-input bg-background px-3 text-sm"
-                    value={pageSize}
-                    onChange={(event) => onPageSizeChange?.(Number(event.target.value))}
-                  >
-                    {PAGE_SIZE_OPTIONS.map((size) => (
-                      <option key={size} value={size}>
-                        {size}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:flex-wrap sm:justify-end sm:gap-3">
-                  <Button
-                    variant="outline"
-                    className="w-full sm:w-auto"
-                    disabled={page <= 1}
-                    onClick={() => onPageChange?.(page - 1)}
-                  >
-                    Sebelumnya
-                  </Button>
-                  <div className="text-center text-sm font-semibold sm:min-w-28">
-                    Halaman {page} / {totalPages}
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="w-full sm:w-auto"
-                    disabled={page >= totalPages}
-                    onClick={() => onPageChange?.(page + 1)}
-                  >
-                    Berikutnya
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <TablePagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              itemLabel="aset"
+              onPageChange={onPageChange}
+              onPageSizeChange={onPageSizeChange}
+            />
           </>
         ) : (
           <div className="p-6">

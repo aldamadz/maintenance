@@ -1,68 +1,33 @@
 import { useEffect, useState } from "react";
-import { addMonths, parseISO, startOfDay } from "date-fns";
+import { format, startOfMonth } from "date-fns";
+import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   Boxes,
+  CheckCircle2,
   Clock3,
+  MapPinned,
   ShieldCheck,
-  Sparkles,
   Wrench,
 } from "lucide-react";
 import { MaintenanceFilters } from "@/components/maintenance/maintenance-filters";
 import { DashboardCharts } from "@/components/maintenance/dashboard-charts";
 import { StatsCard } from "@/components/maintenance/stats-card";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/ui/loading-state";
 import { useRealtimeTick } from "@/hooks/use-realtime-tick";
 import { DEFAULT_FILTERS } from "@/lib/constants";
-import { fetchAssetList, fetchAssetSummary } from "@/lib/assets";
+import { fetchAssetSummary } from "@/lib/assets";
 import {
   fetchAvailableYears,
   fetchDashboardSummary,
   fetchFilterOptions,
 } from "@/lib/maintenance";
-import { formatDate, isIgnorableSupabaseAbortError } from "@/lib/utils";
+import { fetchMonitoringData } from "@/lib/monitoring";
+import { getOfficeTypeLabel } from "@/lib/office-type";
+import { isIgnorableSupabaseAbortError } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-
-function getUrgencyState(asset) {
-  if (asset.priority_label === "belum-ada-histori") {
-    return {
-      label: "Belum ada histori",
-      tone: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-    };
-  }
-
-  if (!asset.next_maintenance_date) {
-    return {
-      label: "Normal",
-      tone: "border-border bg-muted text-muted-foreground",
-    };
-  }
-
-  const today = startOfDay(new Date());
-  const nextDate = parseISO(asset.next_maintenance_date);
-  const warningThreshold = addMonths(today, 3);
-
-  if (nextDate <= today || asset.priority_label === "lewat") {
-    return {
-      label: "Lewat",
-      tone: "border-destructive/25 bg-destructive/12 text-destructive",
-    };
-  }
-
-  if (nextDate <= warningThreshold || asset.priority_label === "mendekati") {
-    return {
-      label: "Mendekati",
-      tone: "border-amber-500/25 bg-amber-500/12 text-amber-700 dark:text-amber-300",
-    };
-  }
-
-  return {
-    label: "Normal",
-    tone: "border-border bg-muted text-muted-foreground",
-  };
-}
 
 export function DashboardPage() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -70,7 +35,8 @@ export function DashboardPage() {
   const [yearOptions, setYearOptions] = useState([]);
   const [summary, setSummary] = useState(null);
   const [assetSummary, setAssetSummary] = useState(null);
-  const [priorityAssets, setPriorityAssets] = useState([]);
+  const [todayMonitoring, setTodayMonitoring] = useState(null);
+  const [monthMonitoring, setMonthMonitoring] = useState(null);
   const [loading, setLoading] = useState(true);
   const realtimeTick = useRealtimeTick("maintenance-live-dashboard", [
     "maintenance",
@@ -136,19 +102,38 @@ export function DashboardPage() {
           search: "",
         };
 
-        const [maintenanceSummary, assetsSummary, assetsPriority] = await Promise.all([
+        const today = format(new Date(), "yyyy-MM-dd");
+        const monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
+        const monitoringFilters = {
+          lokasi: filters.lokasi || "",
+          officeType: "",
+          status: "",
+        };
+
+        const [
+          maintenanceSummary,
+          assetsSummary,
+          todayData,
+          monthData,
+        ] = await Promise.all([
           fetchDashboardSummary(filters),
           fetchAssetSummary(assetFilters),
-          fetchAssetList({
-            filters: assetFilters,
-            page: 1,
-            pageSize: 6,
+          fetchMonitoringData({
+            ...monitoringFilters,
+            tanggalMulai: today,
+            tanggalSelesai: today,
+          }),
+          fetchMonitoringData({
+            ...monitoringFilters,
+            tanggalMulai: monthStart,
+            tanggalSelesai: today,
           }),
         ]);
 
         setSummary(maintenanceSummary);
         setAssetSummary(assetsSummary);
-        setPriorityAssets(assetsPriority.data || []);
+        setTodayMonitoring(todayData);
+        setMonthMonitoring(monthData);
       } catch (error) {
         if (isIgnorableSupabaseAbortError(error)) {
           return;
@@ -203,6 +188,9 @@ export function DashboardPage() {
           <h1 className="mt-2 text-2xl font-extrabold tracking-tight">
             Dashboard Maintenance
           </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Ringkasan kerja harian dan progress periode berjalan.
+          </p>
         </div>
         <MaintenanceFilters
           filters={filters}
@@ -211,6 +199,7 @@ export function DashboardPage() {
           lokasiOptions={options.lokasi}
           yearOptions={yearOptions}
           activityOptions={options.jenisKegiatan}
+          showStatusAndOffice={false}
         />
       </div>
 
@@ -218,6 +207,81 @@ export function DashboardPage() {
         <LoadingState label="Memuat dashboard maintenance..." />
       ) : (
         <>
+          <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
+            <Card className="border-border/70 bg-primary text-primary-foreground">
+              <CardContent className="p-5">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground/75">
+                      Fokus hari ini
+                    </p>
+                    <h2 className="mt-2 text-3xl font-extrabold tracking-tight">
+                      {todayMonitoring?.summary?.terjadwal || 0} sisa terjadwal
+                    </h2>
+                    <p className="mt-2 text-sm text-primary-foreground/75">
+                      {todayMonitoring?.summary?.selesai || 0} selesai dari {todayMonitoring?.summary?.total || 0} pekerjaan di {todayMonitoring?.summary?.totalLokasi || 0} lokasi.
+                    </p>
+                  </div>
+                  <Button asChild variant="secondary">
+                    <Link to="/work">Buka Kerja Hari Ini</Link>
+                  </Button>
+                </div>
+                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl bg-primary-foreground/12 p-4">
+                    <CheckCircle2 className="h-5 w-5" />
+                    <p className="mt-2 text-2xl font-bold">{todayMonitoring?.summary?.selesai || 0}</p>
+                    <p className="text-sm text-primary-foreground/75">Selesai</p>
+                  </div>
+                  <div className="rounded-2xl bg-primary-foreground/12 p-4">
+                    <Clock3 className="h-5 w-5" />
+                    <p className="mt-2 text-2xl font-bold">{todayMonitoring?.summary?.terjadwal || 0}</p>
+                    <p className="text-sm text-primary-foreground/75">Terjadwal</p>
+                  </div>
+                  <div className="rounded-2xl bg-primary-foreground/12 p-4">
+                    <MapPinned className="h-5 w-5" />
+                    <p className="mt-2 text-2xl font-bold">{todayMonitoring?.summary?.totalLokasi || 0}</p>
+                    <p className="text-sm text-primary-foreground/75">Lokasi</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/70">
+              <CardHeader>
+                <CardTitle>Progress Bulan Ini</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-4xl font-extrabold tracking-tight">
+                      {monthMonitoring?.summary?.progress || 0}%
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {monthMonitoring?.summary?.selesai || 0} selesai, {monthMonitoring?.summary?.terjadwal || 0} terjadwal
+                    </p>
+                  </div>
+                  <div className="rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground">
+                    {monthMonitoring?.summary?.total || 0} pekerjaan
+                  </div>
+                </div>
+                <div className="mt-4 h-3 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${monthMonitoring?.summary?.progress || 0}%` }}
+                  />
+                </div>
+                <div className="mt-4 grid gap-2 text-sm">
+                  {monthMonitoring?.summary?.byOfficeType?.map((item) => (
+                    <div key={item.officeType} className="flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">{getOfficeTypeLabel(item.officeType)}</span>
+                      <span className="font-semibold">{item.selesai}/{item.total}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
             <StatsCard
               label="Total aset"
@@ -249,101 +313,6 @@ export function DashboardPage() {
             yearly={summary?.yearly || []}
             activities={summary?.activities || []}
           />
-
-          <Card className="border-border/70">
-            <CardHeader className="pb-3">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <CardTitle>Prioritas Maintenance</CardTitle>
-                </div>
-                <div className="grid gap-3 md:min-w-[320px]">
-                  <div className="rounded-2xl border border-border/70 bg-muted/35 px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-2xl bg-secondary/90 p-3 text-secondary-foreground">
-                        <Sparkles className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          Kegiatan Paling Sering
-                        </p>
-                        <p className="mt-1 text-base font-semibold capitalize">
-                          {summary?.kegiatan_paling_sering || "-"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-border/70 bg-card px-4 py-3 text-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="inline-flex items-center gap-2 text-muted-foreground">
-                        <AlertTriangle className="h-4 w-4 text-destructive" />
-                        Lewat
-                      </span>
-                      <span className="font-semibold">{assetSummary?.overdue_assets || 0}</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-3">
-                      <span className="inline-flex items-center gap-2 text-muted-foreground">
-                        <Clock3 className="h-4 w-4 text-amber-600" />
-                        Mendekati
-                      </span>
-                      <span className="font-semibold">{assetSummary?.upcoming_assets || 0}</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-3">
-                      <span className="inline-flex items-center gap-2 text-muted-foreground">
-                        <Wrench className="h-4 w-4 text-sky-600" />
-                        Belum ada histori
-                      </span>
-                      <span className="font-semibold">
-                        {assetSummary?.missing_history_assets || 0}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {priorityAssets.length ? (
-                <div className="grid gap-3 xl:grid-cols-2">
-                  {priorityAssets.map((asset) => {
-                    const urgency = getUrgencyState(asset);
-
-                    return (
-                      <div
-                        key={asset.id}
-                        className="rounded-2xl border border-border/70 bg-muted/35 p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-semibold">{asset.nama_perangkat}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {asset.kode_aset} · {asset.lokasi || "-"}
-                            </p>
-                          </div>
-                          <Badge className={urgency.tone}>{urgency.label}</Badge>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-                          <span className="text-muted-foreground">Maintenance terakhir</span>
-                          <span className="font-medium">
-                            {formatDate(asset.last_maintenance_date)}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex items-center justify-between gap-3 text-sm">
-                          <span className="text-muted-foreground">Berikutnya</span>
-                          <span className="font-medium">
-                            {formatDate(asset.next_maintenance_date)}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-border/70 bg-muted/25 p-4 text-sm text-muted-foreground">
-                  Belum ada aset prioritas untuk ditampilkan.
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </>
       )}
     </div>

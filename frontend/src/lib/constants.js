@@ -29,7 +29,7 @@ export const ASSET_PRIORITY_OPTIONS = [
 
 export const MAINTENANCE_STATUS_OPTIONS = [
   { value: "selesai", label: "Selesai" },
-  { value: "planning", label: "Planning" },
+  { value: "planning", label: "Terjadwal" },
 ];
 
 export const DEFAULT_FORM_VALUES = {
@@ -59,6 +59,8 @@ export const DEFAULT_FILTERS = {
   tanggalMulai: "",
   tanggalSelesai: "",
   jenisKegiatan: "",
+  status: "",
+  officeType: "",
   search: "",
 };
 

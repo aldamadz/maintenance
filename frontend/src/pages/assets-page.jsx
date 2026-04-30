@@ -1,25 +1,30 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Boxes, Clock3, ShieldCheck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { AlertTriangle, Boxes, CalendarClock, Clock3, ShieldCheck } from "lucide-react";
 import { AssetFilters } from "@/components/assets/asset-filters";
 import { AssetFormDialog } from "@/components/assets/asset-form-dialog";
+import { AssetScheduleDialog } from "@/components/assets/asset-schedule-dialog";
 import { AssetTable } from "@/components/assets/asset-table";
-import { DeleteConfirmDialog } from "@/components/maintenance/delete-confirm-dialog";
 import { StatsCard } from "@/components/maintenance/stats-card";
+import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/ui/loading-state";
 import { useRealtimeTick } from "@/hooks/use-realtime-tick";
 import { DEFAULT_ASSET_FILTERS } from "@/lib/constants";
 import {
   createAsset,
-  deleteAsset,
+  createAssetMaintenanceSchedule,
   fetchAssetList,
   fetchAssetOptions,
   fetchAssetSummary,
   updateAsset,
+  upsertAssetRows,
 } from "@/lib/assets";
+import { parseAssetWorkbook } from "@/lib/maintenance-import";
 import { isIgnorableSupabaseAbortError } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 
 export function AssetsPage() {
+  const navigate = useNavigate();
   const [assetFilters, setAssetFilters] = useState(DEFAULT_ASSET_FILTERS);
   const [assetOptions, setAssetOptions] = useState({
     lokasi: [],
@@ -33,9 +38,11 @@ export function AssetsPage() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [assetDialogOpen, setAssetDialogOpen] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [assetSubmitting, setAssetSubmitting] = useState(false);
+  const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
+  const [assetImporting, setAssetImporting] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState(null);
-  const [deleteState, setDeleteState] = useState({ open: false, item: null });
   const realtimeTick = useRealtimeTick("assets-admin-live", ["assets", "maintenance"]);
 
   useEffect(() => {
@@ -122,25 +129,88 @@ export function AssetsPage() {
     }
   }
 
-  async function handleDeleteConfirm() {
-    if (!deleteState.item?.id) {
-      return;
-    }
+  async function refreshAssets() {
+    const [options, assetSummary, result] = await Promise.all([
+      fetchAssetOptions(),
+      fetchAssetSummary(assetFilters),
+      fetchAssetList({
+        filters: assetFilters,
+        page: assetPage,
+        pageSize: assetPageSize,
+      }),
+    ]);
 
+    setAssetOptions(options);
+    setSummary(assetSummary);
+    setAssetRows(result.data);
+    setAssetTotal(result.count);
+  }
+
+  async function handleAssetImport(file) {
     try {
-      await deleteAsset(deleteState.item.id);
+      setAssetImporting(true);
+      const parsed = await parseAssetWorkbook(file);
+
+      if (!parsed.assetRows.length) {
+        throw new Error("Tidak ada aset valid yang bisa diimport.");
+      }
+
+      const importedCount = await upsertAssetRows(parsed.assetRows);
+      await refreshAssets();
+
       toast({
-        title: "Aset dihapus",
-        description: "Master aset berhasil dihapus dari sistem.",
+        title: "Import aset selesai",
+        description:
+          parsed.errors.length > 0
+            ? `${importedCount} aset diproses, ${parsed.errors.length} baris dilewati.`
+            : `${importedCount} aset berhasil diinsert/update.`,
       });
 
-      setDeleteState({ open: false, item: null });
+      if (parsed.errors.length) {
+        toast({
+          title: "Sebagian baris aset dilewati",
+          description: parsed.errors.slice(0, 3).join(" | "),
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       toast({
-        title: "Gagal menghapus data",
+        title: "Import aset gagal",
         description: error.message,
         variant: "destructive",
       });
+    } finally {
+      setAssetImporting(false);
+    }
+  }
+
+  async function handleCreateSchedule(payload) {
+    try {
+      setScheduleSubmitting(true);
+      const result = await createAssetMaintenanceSchedule(payload);
+      await refreshAssets();
+      setScheduleDialogOpen(false);
+
+      toast({
+        title: "Jadwal dibuat",
+        description: `${result.planned} item terjadwal dibuat/update. ${result.skippedCompleted} item selesai dilewati.`,
+      });
+
+      if (result.skippedInvalid) {
+        toast({
+          title: "Sebagian aset dilewati",
+          description: `${result.skippedInvalid} aset tidak punya data minimal untuk dibuat jadwal.`,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Gagal membuat jadwal",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setScheduleSubmitting(false);
     }
   }
 
@@ -152,9 +222,14 @@ export function AssetsPage() {
     }));
   }
 
+  function applyAssetQuickFilter(nextFilters) {
+    setAssetPage(1);
+    setAssetFilters((current) => ({ ...current, ...nextFilters }));
+  }
+
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
         <StatsCard
           label="Total aset"
           value={summary?.total_assets || 0}
@@ -180,6 +255,30 @@ export function AssetsPage() {
           hint="<= 3 bulan"
           icon={Clock3}
         />
+        <StatsCard
+          label="Sudah terjadwal"
+          value={summary?.scheduled_assets || 0}
+          hint="dari data estimasi"
+          icon={CalendarClock}
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2 rounded-3xl border border-border/70 bg-card p-4">
+        <Button variant="outline" onClick={() => applyAssetQuickFilter({ priority: "lewat" })}>
+          Lewat
+        </Button>
+        <Button variant="outline" onClick={() => applyAssetQuickFilter({ priority: "mendekati" })}>
+          Mendekati
+        </Button>
+        <Button variant="outline" onClick={() => applyAssetQuickFilter({ priority: "belum-ada-histori" })}>
+          Belum ada histori
+        </Button>
+        <Button variant="outline" onClick={() => applyAssetQuickFilter({ status: "aktif" })}>
+          Aset aktif
+        </Button>
+        <Button variant="ghost" onClick={() => applyAssetQuickFilter(DEFAULT_ASSET_FILTERS)}>
+          Reset
+        </Button>
       </div>
 
       {loading && !assetRows.length ? (
@@ -209,22 +308,17 @@ export function AssetsPage() {
               intervalOptions={assetOptions.intervals}
             />
           )}
-          canManage
           showCreate
-          showActions
+          showImport
+          showSchedule
+          importLoading={assetImporting}
+          onImport={handleAssetImport}
+          onSchedule={() => setScheduleDialogOpen(true)}
           onCreate={() => {
             setSelectedAsset(null);
             setAssetDialogOpen(true);
           }}
-          onEdit={(asset) => {
-            setSelectedAsset(asset);
-            setAssetDialogOpen(true);
-          }}
-          onDelete={(asset) =>
-            setDeleteState({
-              open: true,
-              item: asset,
-            })}
+          onRowClick={(asset) => navigate(`/assets/${asset.id}`)}
         />
       )}
 
@@ -237,19 +331,14 @@ export function AssetsPage() {
         loading={assetSubmitting}
       />
 
-      <DeleteConfirmDialog
-        open={deleteState.open}
-        onOpenChange={(open) =>
-          setDeleteState((current) => ({
-            ...current,
-            open,
-          }))}
-        item={deleteState.item}
-        title="Hapus aset"
-        description="Aset yang dipilih akan dihapus dari master data."
-        loading={false}
-        onConfirm={handleDeleteConfirm}
+      <AssetScheduleDialog
+        open={scheduleDialogOpen}
+        onOpenChange={setScheduleDialogOpen}
+        lokasiOptions={assetOptions.lokasi}
+        onSubmit={handleCreateSchedule}
+        loading={scheduleSubmitting}
       />
+
     </div>
   );
 }

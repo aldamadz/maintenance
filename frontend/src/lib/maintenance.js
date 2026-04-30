@@ -1,5 +1,6 @@
 import { MAINTENANCE_SCHEMA, supabase } from "@/lib/supabaseClient";
 import { resolveAssetCode } from "@/lib/asset-code";
+import { normalizeLocationInput, normalizeLocationOptions } from "@/lib/location";
 
 const maintenanceDb = supabase.schema(MAINTENANCE_SCHEMA);
 
@@ -29,7 +30,7 @@ function buildAssetPayload(record) {
     }),
     nama_perangkat: record.nama_perangkat.trim(),
     tipe: record.tipe?.trim() || null,
-    lokasi: record.lokasi?.trim() || null,
+    lokasi: normalizeLocationInput(record.lokasi),
   };
 }
 
@@ -44,8 +45,8 @@ function normalizeMaintenancePayload(payload) {
     }),
     nama_perangkat: payload.nama_perangkat?.trim() || "",
     tipe: payload.tipe?.trim() || null,
-    lokasi: payload.lokasi?.trim() || null,
-    jenis_kegiatan: payload.jenis_kegiatan || null,
+    lokasi: normalizeLocationInput(payload.lokasi),
+    jenis_kegiatan: payload.jenis_kegiatan || "Maintenance",
     durasi: payload.durasi ?? null,
     status: payload.status || "selesai",
     catatan: payload.catatan?.trim() || null,
@@ -54,6 +55,88 @@ function normalizeMaintenancePayload(payload) {
 
 function normalizeMaintenanceRows(rows) {
   return rows.map((row) => normalizeMaintenancePayload(row));
+}
+
+function getMaintenanceConflictKey(row) {
+  return [
+    row.tanggal_maintenance || "",
+    row.kode_aset || "",
+    row.jenis_kegiatan || "",
+  ].join("|");
+}
+
+function deduplicateMaintenanceRows(rows) {
+  return [
+    ...rows
+      .reduce((lookup, row) => {
+        lookup.set(getMaintenanceConflictKey(row), row);
+        return lookup;
+      }, new Map())
+      .values(),
+  ];
+}
+
+async function fetchExistingMaintenanceRows(rows) {
+  const dates = [...new Set(rows.map((row) => row.tanggal_maintenance).filter(Boolean))];
+  const assetCodes = [...new Set(rows.map((row) => row.kode_aset).filter(Boolean))];
+
+  if (!dates.length || !assetCodes.length) {
+    return [];
+  }
+
+  const { data, error } = await maintenanceDb
+    .from("maintenance")
+    .select("tanggal_maintenance,kode_aset,jenis_kegiatan,status,catatan,durasi")
+    .in("tanggal_maintenance", dates)
+    .in("kode_aset", assetCodes);
+
+  if (error) {
+    throw error;
+  }
+
+  const importKeys = new Set(rows.map(getMaintenanceConflictKey));
+
+  return (data || []).filter((row) => importKeys.has(getMaintenanceConflictKey(row)));
+}
+
+function mergeImportWithExistingRows(importRows, existingRows) {
+  const existingLookup = existingRows.reduce((lookup, row) => {
+    lookup.set(getMaintenanceConflictKey(row), row);
+    return lookup;
+  }, new Map());
+
+  return importRows.map((row) => {
+    const existing = existingLookup.get(getMaintenanceConflictKey(row));
+
+    if (!existing) {
+      return row;
+    }
+
+    if (existing.status !== "planning" && row.status === "planning") {
+      return {
+        ...row,
+        status: existing.status,
+        catatan: pickPreferredText(existing.catatan, row.catatan),
+        durasi: existing.durasi ?? row.durasi,
+      };
+    }
+
+    if (existing.catatan && !row.catatan) {
+      return {
+        ...row,
+        catatan: existing.catatan,
+      };
+    }
+
+    return row;
+  });
+}
+
+function normalizeSearchFilter(value) {
+  return String(value || "")
+    .trim()
+    .replaceAll(/[,%()]/g, " ")
+    .replaceAll(/\s+/g, " ");
 }
 
 async function fetchExistingAssetsByCodes(assetCodes) {
@@ -126,11 +209,27 @@ function applyMaintenanceFilters(query, filters) {
   let nextQuery = query;
 
   if (filters.lokasi) {
-    nextQuery = nextQuery.eq("lokasi", filters.lokasi);
+    nextQuery = nextQuery.ilike("lokasi", normalizeLocationInput(filters.lokasi));
   }
 
   if (filters.jenisKegiatan) {
     nextQuery = nextQuery.eq("jenis_kegiatan", filters.jenisKegiatan);
+  }
+
+  if (filters.status) {
+    nextQuery = nextQuery.eq("status", filters.status);
+  }
+
+  if (filters.officeType === "kcp") {
+    nextQuery = nextQuery.ilike("lokasi", "KCP %");
+  }
+
+  if (filters.officeType === "kc") {
+    nextQuery = nextQuery.ilike("lokasi", "KC %");
+  }
+
+  if (filters.officeType === "lainnya") {
+    nextQuery = nextQuery.not("lokasi", "ilike", "KC %").not("lokasi", "ilike", "KCP %");
   }
 
   if (filters.tanggalMulai) {
@@ -142,7 +241,7 @@ function applyMaintenanceFilters(query, filters) {
   }
 
   if (filters.search) {
-    const escaped = filters.search.replaceAll(",", " ");
+    const escaped = normalizeSearchFilter(filters.search);
     nextQuery = nextQuery.or(
       `kode_aset.ilike.%${escaped}%,nama_perangkat.ilike.%${escaped}%`,
     );
@@ -159,7 +258,7 @@ export async function fetchFilterOptions() {
   }
 
   return {
-    lokasi: data?.lokasi || [],
+    lokasi: normalizeLocationOptions(data?.lokasi || []),
     jenisKegiatan: data?.jenis_kegiatan || [],
   };
 }
@@ -172,7 +271,7 @@ export async function fetchAvailableYears(lokasi) {
   const { data, error } = await maintenanceDb.rpc(
     "get_available_maintenance_years",
     {
-      p_lokasi: lokasi,
+      p_lokasi: normalizeLocationInput(lokasi),
     },
   );
 
@@ -185,7 +284,7 @@ export async function fetchAvailableYears(lokasi) {
 
 export async function fetchDashboardSummary(filters) {
   const { data, error } = await maintenanceDb.rpc("get_maintenance_dashboard", {
-    p_lokasi: filters.lokasi || null,
+    p_lokasi: normalizeLocationInput(filters.lokasi) || null,
     p_date_from: filters.tanggalMulai || null,
     p_date_to: filters.tanggalSelesai || null,
     p_jenis_kegiatan: filters.jenisKegiatan || null,
@@ -208,11 +307,19 @@ export async function fetchMaintenanceList({
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let query = maintenanceDb
-    .from("maintenance")
-    .select("*", { count: "exact" })
-    .order(sortColumn, { ascending: sortDirection === "asc" })
-    .range(from, to);
+  let query = maintenanceDb.from("maintenance").select("*", { count: "exact" });
+
+  if (sortColumn === "tanggal_maintenance") {
+    query = query
+      .order("tanggal_maintenance", { ascending: sortDirection === "asc" })
+      .order("urutan_kunjungan", { ascending: true, nullsFirst: false })
+      .order("lokasi", { ascending: true })
+      .order("kode_aset", { ascending: true });
+  } else {
+    query = query.order(sortColumn, { ascending: sortDirection === "asc" });
+  }
+
+  query = query.range(from, to);
 
   query = applyMaintenanceFilters(query, filters);
 
@@ -255,11 +362,19 @@ export async function createMaintenance(payload) {
   }
 }
 
-export async function upsertMaintenanceRows(rows) {
-  const normalizedRows = normalizeMaintenanceRows(rows);
-  await syncAssetCatalog(normalizedRows);
-  const { error } = await maintenanceDb.from("maintenance").upsert(normalizedRows, {
-    onConflict: "tanggal_maintenance,kode_aset",
+export async function upsertMaintenanceRows(rows, assetRows = []) {
+  const normalizedRows = deduplicateMaintenanceRows(normalizeMaintenanceRows(rows));
+  await syncAssetCatalog([...assetRows, ...normalizedRows]);
+
+  if (!normalizedRows.length) {
+    return;
+  }
+
+  const existingRows = await fetchExistingMaintenanceRows(normalizedRows);
+  const rowsToUpsert = mergeImportWithExistingRows(normalizedRows, existingRows);
+
+  const { error } = await maintenanceDb.from("maintenance").upsert(rowsToUpsert, {
+    onConflict: "tanggal_maintenance,kode_aset,jenis_kegiatan",
   });
 
   if (error) {

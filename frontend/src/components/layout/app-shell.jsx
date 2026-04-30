@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   Boxes,
   ChevronRight,
+  ClipboardCheck,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -19,6 +20,11 @@ const navigation = [
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
+  },
+  {
+    label: "Kerja Hari Ini",
+    href: "/work",
+    icon: ClipboardCheck,
   },
   {
     label: "Data Maintenance",
@@ -38,7 +44,12 @@ export function AppShell({ children, showAuthControls = true, defaultTitle = "Da
   const { user, signOut } = useAuth();
 
   const activeItem = useMemo(
-    () => navigation.find((item) => item.href === location.pathname),
+    () =>
+      navigation.find((item) =>
+        item.href === "/assets"
+          ? location.pathname.startsWith("/assets")
+          : item.href === location.pathname,
+      ),
     [location.pathname],
   );
 
